@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Air Jukebox: listen to the valley</title>
+<style>
+  :root{--bg:#1f242b;--panel:#2a3039;--line:#3a424d;--text:#ece6da;--mute:#9aa3ad;
+        --pm25:#e3a53b;--o3:#6fb9de;--co:#d0707d;--no2:#9fba7e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  main{max-width:860px;margin:0 auto;padding:28px 18px 48px}
+  h1{font:600 clamp(2rem,6vw,3.2rem)/1.05 Georgia,"Iowan Old Style",serif;margin:0 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--mute);margin:0 0 22px;max-width:60ch}
+  .bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
+  select,button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px}
+  button{cursor:pointer} button:hover{border-color:var(--mute)}
+  button.play{background:var(--text);color:var(--bg);font-weight:600;min-width:110px}
+  :focus-visible{outline:2px solid var(--o3);outline-offset:2px}
+  label.speed{color:var(--mute);display:flex;gap:8px;align-items:center;font-size:.9rem}
+  .clock{font:600 1.6rem Georgia,serif;margin:6px 0 10px}
+  .clock small{display:block;font:400 .85rem system-ui;color:var(--mute)}
+  canvas{width:100%;height:150px;background:var(--panel);border:1px solid var(--line);border-radius:10px;cursor:pointer;display:block}
+  .tracks{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:16px}
+  .track{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px 14px}
+  .track.off{opacity:.45}
+  .track h2{font:600 1rem system-ui;margin:0;display:flex;justify-content:space-between;align-items:center}
+  .track p{margin:2px 0 8px;color:var(--mute);font-size:.82rem}
+  .val{font:600 1.5rem Georgia,serif}
+  .val small{font:400 .8rem system-ui;color:var(--mute);margin-left:4px}
+  .meter{height:6px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
+  .meter i{display:block;height:100%;width:0;background:var(--c)}
+  input[type=range]{width:100%;margin:14px 0 0;accent-color:var(--pm25)}
+  .note{color:var(--mute);font-size:.82rem;margin-top:22px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Air Jukebox</h1>
+  <p class="sub">NASA's GEOS-CF air quality model, turned into sound. Faster drums and higher notes mean dirtier air. Press play and listen to a few days in the valley.</p>
+
+  <div class="bar">
+    <button class="play" id="play">Play</button>
+    <select id="loc" aria-label="Location"></select>
+    <label class="speed">Speed
+      <select id="speed" aria-label="Playback speed">
+        <option value="2">2 h/s</option><option value="4" selected>4 h/s</option>
+        <option value="8">8 h/s</option><option value="16">16 h/s</option>
+      </select></label>
+  </div>
+
+  <div class="clock" id="clock"></div>
+  <canvas id="chart" aria-label="Pollution timeline. Click to jump."></canvas>
+  <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Time position">
+
+  <div class="tracks" id="tracks"></div>
+  <p class="note" id="note"></p>
+</main>
+
+<script src="data.js" onerror="void 0"></script>
+<script>
+/* ---------- data (real file, else synthetic demo) ---------- */
+function synthetic(){
+  const times=[],pm=[],o3=[],co=[],no2=[]; let s=7;
+  const rnd=()=>(s=(s*16807)%2147483647)/2147483647;
+  const g=(h,c,w)=>Math.exp(-((h-c)**2)/(2*w*w));
+  const t0=Date.UTC(2026,0,10,0,0);
+  for(let i=0;i<168;i++){
+    const t=t0+i*3600e3; times.push(new Date(t).toISOString().slice(0,19)+"Z");
+    const h=((new Date(t).getUTCHours()*60+345)/60)%24;
+    const rush=g(h,8.5,1.8)+g(h,19,2.2);
+    pm.push(55+70*rush+22*Math.sin(i/37)+rnd()*8);
+    no2.push(6+14*rush+rnd()*2);
+    co.push(350+500*rush+rnd()*30);
+    o3.push(14+34*g(h,14,3.2)+rnd()*2);
+  }
+  return {meta:{source:"synthetic demo data"},units:{pm25:"µg/m³",o3:"ppb",co:"ppb",no2:"ppb"},
+    locations:{kathmandu:{name:"Kathmandu Valley (demo data)",tz_offset_min:345,times,series:{pm25:pm,o3,co,no2}}}};
+}
+const REAL=!!window.JUKEBOX_DATA, DATA=window.JUKEBOX_DATA||synthetic();
+
+const TRACKS=[
+  {id:"pm25",label:"PM2.5",how:"Low drum. Hits faster when dirtier.",c:"--pm25"},
+  {id:"o3",label:"Ozone",how:"Bell tone. Higher pitch when dirtier.",c:"--o3"},
+  {id:"co",label:"Carbon monoxide",how:"Pad. Louder and brighter.",c:"--co"},
+  {id:"no2",label:"Nitrogen dioxide",how:"Ticks. Faster when dirtier.",c:"--no2"},
+];
+const $=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ---------- state ---------- */
+let loc, N, idx=0, playing=false, last=0;
+const on={pm25:true,o3:true,co:true,no2:true}, norm={pm25:0,o3:0,co:0,no2:0};
+let range={};
+
+function setLocation(key){
+  loc=DATA.locations[key]; N=loc.times.length; idx=0;
+  range={};
+  for(const t of TRACKS){
+    const v=loc.series[t.id].filter(x=>x!=null);
+    range[t.id]=[Math.min(...v),Math.max(...v)];
+  }
+  $("note").textContent=(REAL?"Data: NASA GMAO GEOS-CF (surface level, area average). ":
+    "Showing built-in demo data. Run fetch_data.py to load real NASA data. ")+
+    "Each pollutant is scaled between its own lowest and highest value in this window.";
+  draw(); update();
+}
+
+/* ---------- UI build ---------- */
+const trEl={};
+for(const t of TRACKS){
+  const d=document.createElement("div"); d.className="track"; d.style.setProperty("--c",`var(${t.c})`);
+  d.innerHTML=`<h2>${t.label}<button data-id="${t.id}" aria-pressed="true">On</button></h2><p>${t.how}</p>
+    <div class="val"><span class="n">–</span><small></small></div><div class="meter"><i></i></div>`;
+  $("tracks").appendChild(d); trEl[t.id]=d;
+  d.querySelector("button").onclick=e=>{
+    on[t.id]=!on[t.id]; e.target.textContent=on[t.id]?"On":"Off";
+    e.target.setAttribute("aria-pressed",on[t.id]); d.classList.toggle("off",!on[t.id]); applyAudio();
+  };
+}
+for(const k in DATA.locations){const o=document.createElement("option");o.value=k;o.textContent=DATA.locations[k].name;$("loc").appendChild(o)}
+$("loc").onchange=e=>setLocation(e.target.value);
+$("play").onclick=()=>playing?pause():start();
+$("scrub").oninput=e=>{idx=e.target.value/1000*(N-1);draw();update()};
+
+function fmtTime(i){
+  const d=new Date(Date.parse(loc.times[Math.round(i)])+loc.tz_offset_min*60000);
+  const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  return {t:`${days[d.getUTCDay()]} ${String(d.getUTCHours()).padStart(2,"0")}:00`,
+          d:d.toISOString().slice(0,10)};
+}
+function valAt(id){
+  const a=loc.series[id],i=Math.floor(idx),f=idx-i,v0=a[i],v1=a[Math.min(i+1,N-1)];
+  return v0==null?null:(v1==null?v0:v0+(v1-v0)*f);
+}
+function update(){
+  const ft=fmtTime(idx);
+  $("clock").innerHTML=`${ft.t}<small>${ft.d}, local time</small>`;
+  for(const t of TRACKS){
+    const v=valAt(t.id),[lo,hi]=range[t.id];
+    norm[t.id]=v==null||hi===lo?0:Math.max(0,Math.min(1,(v-lo)/(hi-lo)));
+    const el=trEl[t.id];
+    el.querySelector(".n").textContent=v==null?"–":v.toFixed(t.id==="pm25"?0:1);
+    el.querySelector("small").textContent=DATA.units[t.id];
+    el.querySelector(".meter i").style.width=(norm[t.id]*100)+"%";
+  }
+  $("scrub").value=idx/(N-1)*1000; applyAudio();
+}
+
+/* ---------- chart ---------- */
+const cv=$("chart"),cx=cv.getContext("2d");
+function draw(){
+  const r=devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
+  cv.width=w*r;cv.height=h*r;cx.setTransform(r,0,0,r,0,0);cx.clearRect(0,0,w,h);
+  cx.strokeStyle=css("--line");cx.lineWidth=1;
+  for(let d=0;d<N;d++){ // day lines at local midnight
+    const lt=new Date(Date.parse(loc.times[d])+loc.tz_offset_min*60000);
+    if(lt.getUTCHours()===0){const x=d/(N-1)*w;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke();}
+  }
+  for(const t of TRACKS){
+    const a=loc.series[t.id],[lo,hi]=range[t.id];
+    cx.strokeStyle=css(t.c);cx.globalAlpha=on[t.id]?1:.25;cx.lineWidth=2;cx.beginPath();
+    let pen=false;
+    a.forEach((v,i)=>{ if(v==null){pen=false;return}
+      const x=i/(N-1)*w,y=h-8-((v-lo)/((hi-lo)||1))*(h-16);
+      pen?cx.lineTo(x,y):cx.moveTo(x,y);pen=true;});
+    cx.stroke();
+  }
+  cx.globalAlpha=1;const px=idx/(N-1)*w;
+  cx.strokeStyle=css("--text");cx.lineWidth=2;cx.beginPath();cx.moveTo(px,0);cx.lineTo(px,h);cx.stroke();
+}
+cv.onclick=e=>{const b=cv.getBoundingClientRect();idx=(e.clientX-b.left)/b.width*(N-1);draw();update()};
+addEventListener("resize",()=>loc&&draw());
+
+/* ---------- audio ---------- */
+let ac,master,G={},o3osc,padA,padB,padF,noiseBuf,timers=[];
+const SCALE=[220,261.63,293.66,329.63,392,440,523.25,587.33,659.25,783.99]; // A minor pentatonic
+
+function initAudio(){
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  master=ac.createGain();master.gain.value=.8;master.connect(ac.destination);
+  for(const t of TRACKS){G[t.id]=ac.createGain();G[t.id].gain.value=0;G[t.id].connect(master)}
+  o3osc=ac.createOscillator();o3osc.type="sine";o3osc.frequency.value=SCALE[0];
+  const og=ac.createGain();og.gain.value=.5;o3osc.connect(og).connect(G.o3);o3osc.start();
+  padF=ac.createBiquadFilter();padF.type="lowpass";padF.frequency.value=400;
+  padA=ac.createOscillator();padB=ac.createOscillator();
+  padA.type=padB.type="triangle";padA.frequency.value=110;padB.frequency.value=164.81;padB.detune.value=6;
+  padA.connect(padF);padB.connect(padF);padF.connect(G.co);padA.start();padB.start();
+  noiseBuf=ac.createBuffer(1,ac.sampleRate*.2,ac.sampleRate);
+  const nd=noiseBuf.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;
+  schedule("pm25",()=>lerp(1.1,.22,norm.pm25),kick);
+  schedule("no2",()=>lerp(.55,.09,norm.no2),tick);
+}
+const lerp=(a,b,t)=>a+(b-a)*t;
+function schedule(id,interval,fn){ // simple look-ahead scheduler
+  let next=0;
+  timers.push(setInterval(()=>{
+    if(!playing||!on[id])return;
+    if(next<ac.currentTime)next=ac.currentTime+.05;
+    while(next<ac.currentTime+.12){fn(next);next+=interval()}
+  },30));
+}
+function kick(t){
+  const o=ac.createOscillator(),g=ac.createGain(),v=.45+.55*norm.pm25;
+  o.frequency.setValueAtTime(130,t);o.frequency.exponentialRampToValueAtTime(42,t+.16);
+  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+.28);
+  o.connect(g).connect(G.pm25);o.start(t);o.stop(t+.3);
+}
+function tick(t){
+  const s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
+  s.buffer=noiseBuf;f.type="highpass";f.frequency.value=6500;
+  g.gain.setValueAtTime(.12+.25*norm.no2,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
+  s.connect(f).connect(g).connect(G.no2);s.start(t);s.stop(t+.06);
+}
+function applyAudio(){
+  if(!ac)return;const t=ac.currentTime;
+  G.pm25.gain.setTargetAtTime(on.pm25?.9:0,t,.05);
+  G.no2.gain.setTargetAtTime(on.no2?.7:0,t,.05);
+  G.o3.gain.setTargetAtTime(on.o3?.06+.14*norm.o3:0,t,.08);
+  G.co.gain.setTargetAtTime(on.co?.05+.2*norm.co:0,t,.2);
+  o3osc.frequency.setTargetAtTime(SCALE[Math.round(norm.o3*(SCALE.length-1))],t,.03);
+  padF.frequency.setTargetAtTime(220+1800*norm.co,t,.2);
+}
+
+/* ---------- playback ---------- */
+function start(){
+  if(!ac)initAudio();ac.resume();playing=true;last=performance.now();
+  $("play").textContent="Pause";requestAnimationFrame(loop);
+}
+function pause(){
+  playing=false;$("play").textContent="Play";
+  if(ac){for(const k in G)G[k].gain.setTargetAtTime(0,ac.currentTime,.05)}
+}
+function loop(now){
+  if(!playing)return;
+  idx+=(now-last)/1000*Number($("speed").value);last=now;
+  if(idx>=N-1)idx=0;
+  draw();update();requestAnimationFrame(loop);
+}
+
+setLocation(Object.keys(DATA.locations)[0]);
+</script>
+</body>
+</html>
