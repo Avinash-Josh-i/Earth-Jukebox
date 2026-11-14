@@ -24,7 +24,9 @@ DEFAULT_URL = "https://opendap.nccs.nasa.gov/dods/gmao/geos-cf/assim/chm_tavg_1h
 # key -> display name, lat/lon box, UTC offset in minutes (Nepal = UTC+5:45)
 LOCATIONS = {
     "kathmandu": {"name": "Kathmandu Valley", "lat": (27.4, 28.0), "lon": (85.0, 85.7), "tz_offset_min": 345},
-    # "delhi": {"name": "Delhi", "lat": (28.4, 28.9), "lon": (76.9, 77.5), "tz_offset_min": 330},
+    "delhi": {"name": "Delhi", "lat": (28.4, 28.9), "lon": (76.9, 77.5), "tz_offset_min": 330},
+    # a clean-air contrast: the jukebox shows one record per location listed here
+    "reykjavik": {"name": "Reykjavik", "lat": (63.9, 64.3), "lon": (-22.3, -21.6), "tz_offset_min": 0},
 }
 
 # track id -> GEOS-CF variable name

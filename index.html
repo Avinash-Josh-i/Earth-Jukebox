@@ -3,231 +3,713 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Air Jukebox: listen to the valley</title>
+<title>Earth Jukebox: listen to the planet</title>
 <style>
-  :root{--bg:#1f242b;--panel:#2a3039;--line:#3a424d;--text:#ece6da;--mute:#9aa3ad;
+  :root{--bg:#1f242b;--panel:#2a3039;--line:#3a424d;--text:#ece6da;--mute:#a9b1ba;--acc:#6fb9de;
         --pm25:#e3a53b;--o3:#6fb9de;--co:#d0707d;--no2:#9fba7e}
+  body.hc{--bg:#000;--panel:#000;--line:#fff;--text:#fff;--mute:#e8e8e8;--acc:#7fe0ff;
+          --pm25:#ffd34d;--o3:#7fe0ff;--co:#ff8fa0;--no2:#b6ff8a}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-  main{max-width:860px;margin:0 auto;padding:28px 18px 48px}
+  main{max-width:920px;margin:0 auto;padding:28px 18px 56px}
   h1{font:600 clamp(2rem,6vw,3.2rem)/1.05 Georgia,"Iowan Old Style",serif;margin:0 0 6px;letter-spacing:-.01em}
-  .sub{color:var(--mute);margin:0 0 22px;max-width:60ch}
-  .bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
-  select,button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px}
-  button{cursor:pointer} button:hover{border-color:var(--mute)}
+  h2{font:600 1.25rem Georgia,serif;margin:28px 0 10px}
+  .sub{color:var(--mute);margin:0 0 6px;max-width:64ch}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .skip{position:absolute;left:-999px;top:8px;background:#fff;color:#000;padding:8px 12px;border-radius:6px;z-index:10}
+  .skip:focus{left:8px}
+  :focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+  select,button,.filebtn{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px}
+  button,.filebtn{cursor:pointer} button:hover,.filebtn:hover{border-color:var(--mute)}
   button.play{background:var(--text);color:var(--bg);font-weight:600;min-width:110px}
-  :focus-visible{outline:2px solid var(--o3);outline-offset:2px}
-  label.speed{color:var(--mute);display:flex;gap:8px;align-items:center;font-size:.9rem}
+  .records{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .rec{display:flex;flex-direction:column;gap:4px;text-align:left;padding:10px;border-radius:12px}
+  .rec[aria-pressed=true]{border-color:var(--text);box-shadow:inset 0 0 0 1px var(--text)}
+  .rec canvas{width:100%;height:70px;border-radius:6px;background:#000;display:block}
+  .rec .kind{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
+  .rec .t{font-weight:600}.rec .b{font-size:.82rem;color:var(--mute)}
+  .filebtn{display:inline-block;margin-top:12px}
+  .filebtn input{position:absolute;opacity:0;width:1px;height:1px}
+  .filebtn:focus-within{outline:3px solid var(--acc);outline-offset:2px}
+  .desc{color:var(--mute);max-width:70ch;margin:0 0 14px}
+  .bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px}
+  label.inl{color:var(--mute);display:flex;gap:8px;align-items:center;font-size:.9rem}
+  input[type=range]{accent-color:var(--acc)}
+  #scrub{width:100%;margin:14px 0 0}
+  .live{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:8px;padding:10px 14px;margin:6px 0 14px;min-height:3.2em}
   .clock{font:600 1.6rem Georgia,serif;margin:6px 0 10px}
   .clock small{display:block;font:400 .85rem system-ui;color:var(--mute)}
-  canvas{width:100%;height:150px;background:var(--panel);border:1px solid var(--line);border-radius:10px;cursor:pointer;display:block}
-  .tracks{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:16px}
+  canvas.view{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;cursor:pointer;display:block}
+  #chart{height:150px}
+  .tracks{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:16px}
   .track{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px 14px}
-  .track.off{opacity:.45}
-  .track h2{font:600 1rem system-ui;margin:0;display:flex;justify-content:space-between;align-items:center}
+  .track.off{opacity:.5}
+  .track h3{font:600 1rem system-ui;margin:0;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .track h3 button{padding:2px 10px;font-size:.85rem}
   .track p{margin:2px 0 8px;color:var(--mute);font-size:.82rem}
   .val{font:600 1.5rem Georgia,serif}
   .val small{font:400 .8rem system-ui;color:var(--mute);margin-left:4px}
+  .cat{font-size:.82rem;color:var(--mute);min-height:1.2em}
   .meter{height:6px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
   .meter i{display:block;height:100%;width:0;background:var(--c)}
-  input[type=range]{width:100%;margin:14px 0 0;accent-color:var(--pm25)}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-top:16px}
+  summary{cursor:pointer;font-weight:600}
+  details p,details li{color:var(--mute);max-width:75ch}
+  details kbd{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 6px;font:inherit;font-size:.85em}
   .note{color:var(--mute);font-size:.82rem;margin-top:22px}
+  .err{color:#ffb3a8}
+  [hidden]{display:none!important}
 </style>
 </head>
 <body>
+<a class="skip" href="#player">Skip to the player</a>
 <main>
-  <h1>Air Jukebox</h1>
-  <p class="sub">NASA's GEOS-CF air quality model, turned into sound. Faster drums and higher notes mean dirtier air. Press play and listen to the measured model data.</p>
+  <header>
+    <h1>Earth Jukebox</h1>
+    <p class="sub">Pick a record and hear the planet. Each record turns NASA Earth data or an Earth image into sound, with text descriptions and keyboard controls so it can be explored without sight.</p>
+  </header>
 
-  <div class="bar">
-    <button class="play" id="play">Play</button>
-    <select id="loc" aria-label="Location"></select>
-    <label class="speed">Speed
-      <select id="speed" aria-label="Playback speed">
-        <option value="2">2 h/s</option><option value="4" selected>4 h/s</option>
-        <option value="8">8 h/s</option><option value="16">16 h/s</option>
-      </select></label>
-  </div>
+  <section aria-labelledby="rec-h">
+    <h2 id="rec-h">Choose a record</h2>
+    <div id="records" class="records" role="group" aria-label="Records"></div>
+    <label class="filebtn">Play your own image <input type="file" id="file" accept="image/*"></label>
+    <p class="note" id="frames-note" hidden>No NASA EIC frames found in <code>frames/</code> yet. Add images and list them in <code>frames.js</code> (see README), or load your own image above.</p>
+  </section>
 
-  <div class="clock" id="clock"></div>
-  <canvas id="chart" aria-label="Pollution timeline. Click to jump."></canvas>
-  <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Time position">
+  <section id="player" tabindex="-1" aria-labelledby="now-title">
+    <h2 id="now-title">Nothing selected</h2>
+    <p class="desc" id="now-desc">Choose a record above.</p>
 
-  <div class="tracks" id="tracks"></div>
+    <div class="bar">
+      <button class="play" id="play" disabled>Play</button>
+      <label class="inl">Speed
+        <select id="speed" aria-label="Playback speed"></select></label>
+      <label class="inl">Volume
+        <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8" aria-label="Volume"></label>
+      <label class="inl" id="scale-wrap">Scale
+        <select id="scale" aria-label="Loudness and pitch scale">
+          <option value="ref">Health reference</option><option value="win">This window only</option></select></label>
+      <button id="describe">Describe this moment</button>
+    </div>
+    <div class="bar">
+      <label class="inl"><input type="checkbox" id="speak" checked> Announce changes while playing</label>
+      <label class="inl"><input type="checkbox" id="hc"> High contrast</label>
+    </div>
+
+    <div id="live" class="live" aria-live="polite" aria-atomic="true"></div>
+
+    <div id="view-data" hidden>
+      <div class="clock" id="clock"></div>
+      <canvas id="chart" class="view" role="img" aria-label="Pollution timeline chart. Click to jump to a time." aria-describedby="chartdesc"></canvas>
+      <p class="sr-only" id="chartdesc"></p>
+    </div>
+    <div id="view-image" hidden>
+      <canvas id="stage" class="view" role="img" aria-label="The selected image. A line sweeps across it from left to right while it plays. Click to jump." aria-describedby="stagedesc"></canvas>
+      <p class="sr-only" id="stagedesc"></p>
+    </div>
+    <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Position" disabled>
+
+    <div class="tracks" id="tracks"></div>
+  </section>
+
+  <details id="story">
+    <summary>Why it sounds like this</summary>
+    <p><strong>Air records.</strong> NASA's GEOS-CF model gives hourly surface concentrations of fine particles (PM2.5), ozone, carbon monoxide and nitrogen dioxide. PM2.5 is the kick drum: the dirtier the air, the faster and heavier it beats. Ozone is a bell that climbs a pentatonic scale. Carbon monoxide is a pad that gets louder and brighter. Nitrogen dioxide is a hi-hat style tick that speeds up. When PM2.5 passes the "unhealthy" range the pad's calm fifth bends towards a tense tritone and its filter sharpens, so danger is something you can hear, not only read.</p>
+    <p><strong>Scale.</strong> By default each pollutant is mapped against a fixed health-based range, so a clean week and a polluted week sound different. The chart's dashed line is the WHO 24-hour PM2.5 guideline (15 µg/m³). "This window only" rescales to the lowest and highest values shown, which is useful for hearing the daily rhythm but hides how bad the air is.</p>
+    <p><strong>Image records.</strong> The picture is read as a score, left to right. The average hue chooses the key. Warm images use a minor scale, cool ones a major scale. In each vertical slice the brightest, most saturated feature sets the melody pitch: higher in the picture means a higher note. The melody pans from left ear to right ear in step with the scan line. Slice brightness opens the pad's filter and sets loudness. Dark slices add a low sub tone. Sharp edges add light ticks, and detailed images play more notes. Smooth gradients play fewer, longer ones. Drag the position slider while paused to hear any slice.</p>
+    <p><strong>Credits.</strong> Air data comes from NASA GMAO GEOS-CF. Image credits are shown at the bottom of the page for each record.</p>
+  </details>
+
+  <details>
+    <summary>Keyboard shortcuts</summary>
+    <ul>
+      <li><kbd>Space</kbd> or <kbd>K</kbd>: play or pause</li>
+      <li><kbd>←</kbd> <kbd>→</kbd>: move 5% (hold <kbd>Shift</kbd> for 20%)</li>
+      <li><kbd>↑</kbd> <kbd>↓</kbd>: volume</li>
+      <li><kbd>1</kbd>–<kbd>4</kbd>: switch an instrument on or off</li>
+      <li><kbd>D</kbd>: describe this moment</li>
+    </ul>
+  </details>
+
   <p class="note" id="note"></p>
 </main>
 
 <script src="data.js"></script>
+<script src="frames.js"></script>
 <script>
-/* ---------- data (generated by fetch_data.py) ---------- */
-const DATA=window.JUKEBOX_DATA;
-if(!DATA||!DATA.locations||!Object.keys(DATA.locations).length){
-  document.querySelector("main").innerHTML=
-    "<h1>Air Jukebox</h1><p class=\"sub\">Real air-quality data is unavailable.</p>"+
-    "<p class=\"note\">Run <code>python fetch_data.py</code> to generate data.js, then reload this page.</p>";
-  throw new Error("Missing or invalid data.js");
-}
-
-const TRACKS=[
-  {id:"pm25",label:"PM2.5",how:"Low drum. Hits faster when dirtier.",c:"--pm25"},
-  {id:"o3",label:"Ozone",how:"Bell tone. Higher pitch when dirtier.",c:"--o3"},
-  {id:"co",label:"Carbon monoxide",how:"Pad. Louder and brighter.",c:"--co"},
-  {id:"no2",label:"Nitrogen dioxide",how:"Ticks. Faster when dirtier.",c:"--no2"},
-];
+"use strict";
+/* =============== helpers =============== */
 const $=id=>document.getElementById(id);
-const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const css=n=>getComputedStyle(document.body).getPropertyValue(n).trim();
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+const NOTE_NAMES=["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+const noteName=m=>NOTE_NAMES[((m%12)+12)%12]+(Math.floor(m/12)-1);
+const lvl=n=>n<.33?"low":n<.66?"moderate":"high";
 
-/* ---------- state ---------- */
-let loc, N, idx=0, playing=false, last=0;
-const on={pm25:true,o3:true,co:true,no2:true}, norm={pm25:0,o3:0,co:0,no2:0};
-let range={};
+const DATA=window.JUKEBOX_DATA;
+const HAS_DATA=!!(DATA&&DATA.locations&&Object.keys(DATA.locations).length);
 
-function setLocation(key){
-  loc=DATA.locations[key]; N=loc.times.length; idx=0;
-  range={};
-  for(const t of TRACKS){
-    const v=loc.series[t.id].filter(x=>x!=null);
-    range[t.id]=[Math.min(...v),Math.max(...v)];
+/* =============== state =============== */
+let mode=null, rec=null, playing=false, ac=null, loopId=0, lastSay=0;
+let loc,N=0,idx=0,last=0,range={};
+let IM=null, ipos=0, sweepDur=16, imgT0=0, nextStep=0, pvT=0;
+const STEPS=64;
+let scaleMode="ref";
+const REF={pm25:[0,150],o3:[20,80],co:[100,1000],no2:[0,10]};          // fixed, health-oriented ranges
+const norm={pm25:0,o3:0,co:0,no2:0};
+let tension=0;
+const onD={pm25:true,o3:true,co:true,no2:true};
+const onI={mel:true,pad:true,bass:true,tex:true};
+
+const TRACKS_D=[
+  {id:"pm25",label:"PM2.5",how:"Kick drum, left of centre. Hits faster and harder when dirtier.",c:"--pm25"},
+  {id:"o3",label:"Ozone",how:"Bell, left ear. Higher pitch when higher.",c:"--o3"},
+  {id:"co",label:"Carbon monoxide",how:"Pad. Louder and brighter.",c:"--co"},
+  {id:"no2",label:"Nitrogen dioxide",how:"Ticks, right ear. Faster when higher.",c:"--no2"},
+];
+const TRACKS_I=[
+  {id:"mel",label:"Melody",how:"Pitch follows the height of the brightest feature. Pans left to right with the scan.",c:"--pm25"},
+  {id:"pad",label:"Harmony pad",how:"Colour sets the key. Warm is minor, cool is major. Brighter slices open the filter.",c:"--o3"},
+  {id:"bass",label:"Bass",how:"Slice hue picks the bass note. Dark slices add a low sub tone.",c:"--co"},
+  {id:"tex",label:"Texture",how:"Sharp edges add light ticks.",c:"--no2"},
+];
+const cardEl={};
+
+/* =============== records =============== */
+let frameRecs=[], userRec=null;
+const srcCache={};
+function loadImage(url){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>rej(new Error("not found: "+url));im.src=url;});}
+async function getSource(r){
+  if(srcCache[r.id])return srcCache[r.id];
+  let s;
+  if(typeof r.src==="function")s=r.src();
+  else if(typeof r.src==="string")s=await loadImage(r.src);
+  else s=r.src;
+  return srcCache[r.id]=s;
+}
+function allRecords(){
+  const a=[];
+  if(HAS_DATA)for(const k in DATA.locations)a.push({id:"air-"+k,kind:"data",key:k,tag:"Data · NASA GEOS-CF",
+    title:"Air over "+DATA.locations[k].name,blurb:"Four pollutants as drums, bells, a pad and ticks."});
+  a.push(...frameRecs);if(userRec)a.push(userRec);return a;
+}
+function drawThumb(cv,r){
+  const g=cv.getContext("2d");g.clearRect(0,0,cv.width,cv.height);
+  if(r.kind==="data"){
+    const v=DATA.locations[r.key].series.pm25,n=v.length;g.strokeStyle="#e3a53b";g.lineWidth=2;g.beginPath();
+    let pen=false;v.forEach((x,i)=>{if(x==null){pen=false;return}const px=i/(n-1)*cv.width,py=cv.height-6-clamp(x/150)*(cv.height-12);
+      pen?g.lineTo(px,py):g.moveTo(px,py);pen=true});g.stroke();return;}
+  const s=srcCache[r.id];if(!s)return;
+  const sw=s.naturalWidth||s.width,sh=s.naturalHeight||s.height,k=Math.max(cv.width/sw,cv.height/sh);
+  g.drawImage(s,(cv.width-sw*k)/2,(cv.height-sh*k)/2,sw*k,sh*k);
+}
+async function renderRecords(){
+  const box=$("records");box.textContent="";
+  const list=allRecords();
+  for(const r of list){
+    const b=document.createElement("button");b.className="rec";b.type="button";
+    b.setAttribute("aria-pressed",rec&&rec.id===r.id?"true":"false");b.dataset.id=r.id;
+    b.innerHTML=`<canvas width="240" height="70" aria-hidden="true"></canvas><span class="kind"></span><span class="t"></span><span class="b"></span>`;
+    b.querySelector(".kind").textContent=r.tag||"Image";b.querySelector(".t").textContent=r.title;b.querySelector(".b").textContent=r.blurb||"";
+    b.onclick=()=>selectRecord(r,true);box.appendChild(b);
+    const cv=b.querySelector("canvas");
+    if(r.kind==="data")drawThumb(cv,r);else getSource(r).then(()=>drawThumb(cv,r)).catch(()=>{});
   }
-  const first=loc.times[0],last=loc.times[loc.times.length-1];
-  $("note").textContent=`Data: ${DATA.meta.source}. ${first} to ${last} UTC. `+
-    "Surface-level area average; each pollutant is scaled between its own lowest and highest value in this window.";
-  draw(); update();
 }
+async function loadFrames(){
+  const list=window.JUKEBOX_FRAMES||[];
+  const res=await Promise.allSettled(list.map(async f=>{await loadImage(f.src);
+    return {id:"frame-"+f.id,kind:"image",tag:"Image · NASA EIC",title:f.title,blurb:f.blurb||"",src:f.src,description:f.description||"",credit:f.credit||"NASA Earth Information Center"};}));
+  frameRecs=res.filter(x=>x.status==="fulfilled").map(x=>x.value);
+  $("frames-note").hidden=frameRecs.length>0;
+  renderRecords();
+}
+$("file").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const im=new Image();im.onload=()=>{
+    userRec={id:"user",kind:"image",tag:"Your image",title:f.name,blurb:"Loaded from your device.",src:im,credit:"Your own image."};
+    srcCache.user=im;renderRecords();selectRecord(userRec,true);};
+  im.onerror=()=>setLive("That file could not be read as an image.");
+  im.src=URL.createObjectURL(f);
+};
 
-/* ---------- UI build ---------- */
-const trEl={};
-for(const t of TRACKS){
-  const d=document.createElement("div"); d.className="track"; d.style.setProperty("--c",`var(${t.c})`);
-  d.innerHTML=`<h2>${t.label}<button data-id="${t.id}" aria-pressed="true">On</button></h2><p>${t.how}</p>
-    <div class="val"><span class="n">–</span><small></small></div><div class="meter"><i></i></div>`;
-  $("tracks").appendChild(d); trEl[t.id]=d;
-  d.querySelector("button").onclick=e=>{
-    on[t.id]=!on[t.id]; e.target.textContent=on[t.id]?"On":"Off";
-    e.target.setAttribute("aria-pressed",on[t.id]); d.classList.toggle("off",!on[t.id]); applyAudio();
-  };
+/* =============== image analysis (pure; works on RGBA pixel arrays) =============== */
+function rgb2hsv(r,g,b){
+  r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;let h=0;
+  if(d>0){if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;if(h<0)h+=360}
+  return [h,mx===0?0:d/mx,mx];
 }
-for(const k in DATA.locations){const o=document.createElement("option");o.value=k;o.textContent=DATA.locations[k].name;$("loc").appendChild(o)}
-$("loc").onchange=e=>setLocation(e.target.value);
-$("play").onclick=()=>playing?pause():start();
-$("scrub").oninput=e=>{idx=e.target.value/1000*(N-1);draw();update()};
-
-function fmtTime(i){
-  const d=new Date(Date.parse(loc.times[Math.round(i)])+loc.tz_offset_min*60000);
-  const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  return {t:`${days[d.getUTCDay()]} ${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")}`,
-          d:d.toISOString().slice(0,10)};
+function colorName(h,s,v){
+  if(v<.2)return "dark";
+  if(s<.18)return v>.75?"white":"grey";
+  if(h<15||h>=345)return "red";if(h<45)return "orange";if(h<70)return "yellow";
+  if(h<160)return "green";if(h<195)return "teal";if(h<255)return "blue";if(h<290)return "purple";return "pink";
 }
-function valAt(id){
-  const a=loc.series[id],i=Math.floor(idx),f=idx-i,v0=a[i],v1=a[Math.min(i+1,N-1)];
-  return v0==null?null:(v1==null?v0:v0+(v1-v0)*f);
-}
-function update(){
-  const ft=fmtTime(idx);
-  $("clock").innerHTML=`${ft.t}<small>${ft.d}, local time</small>`;
-  for(const t of TRACKS){
-    const v=valAt(t.id),[lo,hi]=range[t.id];
-    norm[t.id]=v==null||hi===lo?0:Math.max(0,Math.min(1,(v-lo)/(hi-lo)));
-    const el=trEl[t.id];
-    el.querySelector(".n").textContent=v==null?"–":v.toFixed(t.id==="pm25"?0:1);
-    el.querySelector("small").textContent=DATA.units[t.id];
-    el.querySelector(".meter i").style.width=(norm[t.id]*100)+"%";
+function analyze(px,w,h){
+  const n=w*h,V=new Float32Array(n),S=new Float32Array(n),L=new Float32Array(n),H=new Float32Array(n);
+  let hx=0,hy=0,ws=0,sumS=0,sumV=0,dark=0,warm=0,cool=0;const cnt={};
+  const quad=[0,0,0,0];
+  for(let i=0;i<n;i++){
+    const r=px[4*i],g=px[4*i+1],b=px[4*i+2],[hh,ss,vv]=rgb2hsv(r,g,b);
+    H[i]=hh;S[i]=ss;V[i]=vv;L[i]=(.2126*r+.7152*g+.0722*b)/255;
+    const wg=vv<.15?0:ss*vv;hx+=Math.cos(hh*Math.PI/180)*wg;hy+=Math.sin(hh*Math.PI/180)*wg;ws+=wg;
+    sumS+=ss;sumV+=vv;if(vv<.15)dark++;
+    if(ss>.2&&vv>.2){if(hh<70||hh>=330)warm+=wg;else if(hh>=160&&hh<=270)cool+=wg}
+    const nm=colorName(hh,ss,vv);cnt[nm]=(cnt[nm]||0)+1;
+    const x=i%w,y=(i/w)|0;quad[(y>=h/2?2:0)+(x>=w/2?1:0)]+=vv;
   }
-  $("scrub").value=idx/(N-1)*1000; applyAudio();
+  const E=new Float32Array(n);let eSum=0;
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x,gx=L[i+1]-L[i-1],gy=L[i+w]-L[i-w];
+    const e=clamp(Math.hypot(gx,gy)*4);E[i]=e;eSum+=e;}
+  const hue=ws>1e-6?((Math.atan2(hy,hx)*180/Math.PI)+360)%360:0;
+  const names=Object.entries(cnt).filter(([k])=>k!=="dark").sort((a,b)=>b[1]-a[1]).map(([k,c])=>[k,c/n]);
+  const qn=["top left","top right","bottom left","bottom right"];
+  const g={hue,sat:sumS/n,val:sumV/n,warmth:(warm-cool)/(warm+cool+1e-6),edge:eSum/n,darkFrac:dark/n,
+           names,bright:qn[quad.indexOf(Math.max(...quad))]};
+  const cols=[];
+  for(let k=0;k<STEPS;k++){
+    const x0=Math.floor(k*w/STEPS),x1=Math.max(x0+1,Math.floor((k+1)*w/STEPS));
+    let sv=0,ss=0,se=0,sd=0,cx=0,cy=0,cw=0,c=0,peak=0;const row=new Float32Array(h),rowE=new Float32Array(h);
+    const nc=Math.max(1,Math.min(x1,w)-x0);
+    for(let x=x0;x<x1&&x<w;x++)for(let y=0;y<h;y++){const i=y*w+x,vv=V[i],s=S[i];
+      sv+=vv;ss+=s;se+=E[i];if(vv<.15)sd++;c++;if(vv>peak)peak=vv;
+      const wg=vv<.15?0:s*vv;cx+=Math.cos(H[i]*Math.PI/180)*wg;cy+=Math.sin(H[i]*Math.PI/180)*wg;cw+=wg;
+      row[y]+=.5*vv+.5*s*vv;rowE[y]+=E[i];}
+    // salience: what stands out in this slice (contrast with the slice average, plus edges), so smooth gradients do not pin the melody to one edge
+    let mean=0;for(let y=0;y<h;y++){row[y]/=nc;rowE[y]/=nc;mean+=row[y]}mean/=h;
+    for(let y=0;y<h;y++)row[y]=.35*row[y]+1.2*Math.abs(row[y]-mean)+1.0*rowE[y];
+    let best=-1,bi=0;
+    for(let y=0;y<h;y++){let a=0,m=0;for(let d=-2;d<=2;d++){const yy=y+d;if(yy>=0&&yy<h){a+=row[yy];m++}}a/=m;if(a>best){best=a;bi=y}}
+    const hue2=cw>1e-6?((Math.atan2(cy,cx)*180/Math.PI)+360)%360:hue;
+    cols.push({v:sv/c,s:ss/c,e:se/c,dark:sd/c,hue:hue2,peak,row:h>1?bi/(h-1):.5});
+  }
+  return {g,cols};
+}
+function buildKey(g){
+  const off=Math.round(g.hue/360*12)%12,minor=g.warmth>.15,iv=minor?[0,3,5,7,10]:[0,2,4,7,9],root=45+off,scale=[];
+  for(let o=0;o<2;o++)for(const i of iv)scale.push(root+12+12*o+i);
+  return {root,minor,iv,scale,name:NOTE_NAMES[root%12]+(minor?" minor":" major")};
+}
+function describeImageGlobal(an,key){
+  const g=an.g,tone=g.val>.65?"bright":g.val<.3?"dark":"medium-toned";
+  const nm=g.names.slice(0,2).filter(x=>x[1]>.08).map(x=>x[0]);
+  const warmth=g.warmth>.3?"warm":g.warmth<-.3?"cool":"a mix of warm and cool";
+  const struct=g.edge>.12?"detailed, with many sharp boundaries":g.edge>.04?"with some structure":"smooth, with soft gradients";
+  return `A ${tone} image${nm.length?", mostly "+nm.join(" and "):""}, ${warmth} in feel, ${struct}.`+
+    (g.darkFrac>.5?" More than half of it is dark.":"")+` The brightest area is the ${g.bright}.`+
+    ` It plays in ${key.name}, ${key.minor?"a more tense minor sound":"an open major sound"}.`;
+}
+async function prepareImage(r){
+  const src=await getSource(r),sw=src.naturalWidth||src.width,sh=src.naturalHeight||src.height;
+  const w=Math.min(192,sw),h=Math.max(8,Math.round(w*sh/sw)),c=document.createElement("canvas");c.width=w;c.height=h;
+  const g=c.getContext("2d",{willReadFrequently:true});g.drawImage(src,0,0,w,h);
+  let px;try{px=g.getImageData(0,0,w,h).data}catch(e){
+    throw new Error("The browser blocked reading this image's pixels. This happens when the page is opened straight from a file. Run  python -m http.server  in the project folder and open http://localhost:8000 instead.");}
+  const an=analyze(px,w,h),key=buildKey(an.g);
+  const desc=(r.description?r.description+" ":"")+describeImageGlobal(an,key);
+  return {src,w:sw,h:sh,an,key,desc,title:r.title,credit:r.credit};
 }
 
-/* ---------- chart ---------- */
-const cv=$("chart"),cx=cv.getContext("2d");
-function draw(){
-  const r=devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
-  cv.width=w*r;cv.height=h*r;cx.setTransform(r,0,0,r,0,0);cx.clearRect(0,0,w,h);
-  cx.strokeStyle=css("--line");cx.lineWidth=1;
-  for(let d=0;d<N;d++){ // day lines at local midnight
-    const lt=new Date(Date.parse(loc.times[d])+loc.tz_offset_min*60000);
-    if(lt.getUTCHours()===0){const x=d/(N-1)*w;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke();}
-  }
-  for(const t of TRACKS){
-    const a=loc.series[t.id],[lo,hi]=range[t.id];
-    cx.strokeStyle=css(t.c);cx.globalAlpha=on[t.id]?1:.25;cx.lineWidth=2;cx.beginPath();
-    let pen=false;
-    a.forEach((v,i)=>{ if(v==null){pen=false;return}
-      const x=i/(N-1)*w,y=h-8-((v-lo)/((hi-lo)||1))*(h-16);
-      pen?cx.lineTo(x,y):cx.moveTo(x,y);pen=true;});
-    cx.stroke();
-  }
-  cx.globalAlpha=1;const px=idx/(N-1)*w;
-  cx.strokeStyle=css("--text");cx.lineWidth=2;cx.beginPath();cx.moveTo(px,0);cx.lineTo(px,h);cx.stroke();
-}
-cv.onclick=e=>{const b=cv.getBoundingClientRect();idx=(e.clientX-b.left)/b.width*(N-1);draw();update()};
-addEventListener("resize",()=>loc&&draw());
-
-/* ---------- audio ---------- */
-let ac,master,G={},o3osc,padA,padB,padF,noiseBuf,timers=[];
+/* =============== audio =============== */
+let master,dataOut,imgOut,revIn,noiseBuf,G={},I={},padA,padB,padF,timers=[];
 const SCALE=[220,261.63,293.66,329.63,392,440,523.25,587.33,659.25,783.99]; // A minor pentatonic
-
+function bus(dest,pan,wet){
+  const g=ac.createGain(),p=ac.createStereoPanner();p.pan.value=pan;g.connect(p);p.connect(dest);
+  if(wet>0){const s=ac.createGain();s.gain.value=wet;p.connect(s);s.connect(revIn)}
+  return {in:g,pan:p};
+}
+function makeReverb(){
+  const len=Math.floor(ac.sampleRate*2.2),buf=ac.createBuffer(2,len,ac.sampleRate);
+  for(let c=0;c<2;c++){const d=buf.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.6)}
+  const cv=ac.createConvolver();cv.buffer=buf;const g=ac.createGain();g.gain.value=.55;cv.connect(g);g.connect(master);return cv;
+}
 function initAudio(){
+  if(ac)return;
   ac=new (window.AudioContext||window.webkitAudioContext)();
-  master=ac.createGain();master.gain.value=.8;master.connect(ac.destination);
-  for(const t of TRACKS){G[t.id]=ac.createGain();G[t.id].gain.value=0;G[t.id].connect(master)}
-  o3osc=ac.createOscillator();o3osc.type="sine";o3osc.frequency.value=SCALE[0];
-  const og=ac.createGain();og.gain.value=.5;o3osc.connect(og).connect(G.o3);o3osc.start();
-  padF=ac.createBiquadFilter();padF.type="lowpass";padF.frequency.value=400;
-  padA=ac.createOscillator();padB=ac.createOscillator();
-  padA.type=padB.type="triangle";padA.frequency.value=110;padB.frequency.value=164.81;padB.detune.value=6;
-  padA.connect(padF);padB.connect(padF);padF.connect(G.co);padA.start();padB.start();
+  master=ac.createGain();master.gain.value=Number($("vol").value);
+  const comp=ac.createDynamicsCompressor();master.connect(comp);comp.connect(ac.destination);
+  revIn=makeReverb();
+  dataOut=ac.createGain();imgOut=ac.createGain();dataOut.gain.value=0;imgOut.gain.value=0;dataOut.connect(master);imgOut.connect(master);
   noiseBuf=ac.createBuffer(1,ac.sampleRate*.2,ac.sampleRate);
   const nd=noiseBuf.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;
-  schedule("pm25",()=>lerp(1.1,.22,norm.pm25),kick);
-  schedule("no2",()=>lerp(.55,.09,norm.no2),tick);
+  initDataAudio();initImageAudio();
 }
-const lerp=(a,b,t)=>a+(b-a)*t;
-function schedule(id,interval,fn){ // simple look-ahead scheduler
+function routeOutputs(){
+  if(!ac)return;const t=ac.currentTime;
+  dataOut.gain.setTargetAtTime(playing&&mode==="data"?1:0,t,.05);
+  imgOut.gain.setTargetAtTime(playing&&mode==="image"?1:0,t,.05);
+}
+function voiceBell(dest,t,f,v,dur){
+  for(const [mul,amp,dec] of [[1,1,dur],[2.76,.35,dur*.5],[5.4,.12,dur*.25]]){
+    const o=ac.createOscillator(),g=ac.createGain();o.type="sine";o.frequency.value=f*mul;
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v*amp,t+.006);g.gain.exponentialRampToValueAtTime(.0005,t+dec);
+    o.connect(g);g.connect(dest);o.start(t);o.stop(t+dec+.05);
+  }
+}
+function pluck(dest,t,f,v,dur,cutoff){
+  const o=ac.createOscillator(),fl=ac.createBiquadFilter(),g=ac.createGain();
+  o.type="sawtooth";o.frequency.value=f;fl.type="lowpass";fl.frequency.value=cutoff;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v*.45,t+.01);g.gain.exponentialRampToValueAtTime(.0005,t+dur);
+  o.connect(fl);fl.connect(g);g.connect(dest);o.start(t);o.stop(t+dur+.05);
+}
+function tickTo(dest,t,vol){
+  const s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
+  s.buffer=noiseBuf;f.type="highpass";f.frequency.value=6500;
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
+  s.connect(f);f.connect(g);g.connect(dest);s.start(t);s.stop(t+.06);
+}
+function soft(dest,t,f,v,dur){
+  const o=ac.createOscillator(),g=ac.createGain();o.type="sine";o.frequency.value=f;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.03);g.gain.exponentialRampToValueAtTime(.0005,t+dur);
+  o.connect(g);g.connect(dest);o.start(t);o.stop(t+dur+.05);
+}
+
+/* ---- data voices ---- */
+function initDataAudio(){
+  const b={pm25:bus(dataOut,-.1,0),o3:bus(dataOut,-.5,.5),co:bus(dataOut,0,.6),no2:bus(dataOut,.5,.12)};
+  for(const k in b){G[k]=b[k].in;G[k].gain.value=0}
+  padF=ac.createBiquadFilter();padF.type="lowpass";padF.frequency.value=400;
+  padA=ac.createOscillator();padB=ac.createOscillator();padA.type=padB.type="triangle";
+  padA.frequency.value=110;padB.frequency.value=164.81;padB.detune.value=6;
+  padA.connect(padF);padB.connect(padF);padF.connect(G.co);padA.start();padB.start();
+  schedule(()=>mode==="data"&&onD.pm25,()=>lerp(1.1,.22,norm.pm25),kickAt);
+  schedule(()=>mode==="data"&&onD.no2,()=>lerp(.55,.09,norm.no2),t=>tickTo(G.no2,t,.12+.25*norm.no2));
+  schedule(()=>mode==="data"&&onD.o3,()=>.8,bellAt);
+}
+function schedule(gate,interval,fn){ // look-ahead scheduler
   let next=0;
   timers.push(setInterval(()=>{
-    if(!playing||!on[id])return;
+    if(!playing||!gate())return;
     if(next<ac.currentTime)next=ac.currentTime+.05;
     while(next<ac.currentTime+.12){fn(next);next+=interval()}
   },30));
 }
-function kick(t){
+function kickAt(t){
   const o=ac.createOscillator(),g=ac.createGain(),v=.45+.55*norm.pm25;
   o.frequency.setValueAtTime(130,t);o.frequency.exponentialRampToValueAtTime(42,t+.16);
   g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+.28);
-  o.connect(g).connect(G.pm25);o.start(t);o.stop(t+.3);
+  o.connect(g);g.connect(G.pm25);o.start(t);o.stop(t+.3);
 }
-function tick(t){
-  const s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
-  s.buffer=noiseBuf;f.type="highpass";f.frequency.value=6500;
-  g.gain.setValueAtTime(.12+.25*norm.no2,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
-  s.connect(f).connect(g).connect(G.no2);s.start(t);s.stop(t+.06);
-}
+function bellAt(t){voiceBell(G.o3,t,SCALE[Math.round(norm.o3*(SCALE.length-1))],.07+.22*norm.o3,1.6)}
 function applyAudio(){
-  if(!ac)return;const t=ac.currentTime;
-  G.pm25.gain.setTargetAtTime(on.pm25?.9:0,t,.05);
-  G.no2.gain.setTargetAtTime(on.no2?.7:0,t,.05);
-  G.o3.gain.setTargetAtTime(on.o3?.06+.14*norm.o3:0,t,.08);
-  G.co.gain.setTargetAtTime(on.co?.05+.2*norm.co:0,t,.2);
-  o3osc.frequency.setTargetAtTime(SCALE[Math.round(norm.o3*(SCALE.length-1))],t,.03);
-  padF.frequency.setTargetAtTime(220+1800*norm.co,t,.2);
+  if(!ac||mode!=="data")return;const t=ac.currentTime;
+  G.pm25.gain.setTargetAtTime(onD.pm25?.9:0,t,.05);
+  G.no2.gain.setTargetAtTime(onD.no2?.7:0,t,.05);
+  G.o3.gain.setTargetAtTime(onD.o3?1:0,t,.05);
+  G.co.gain.setTargetAtTime(onD.co?.05+.2*norm.co:0,t,.2);
+  padF.frequency.setTargetAtTime(220+1800*norm.co+900*tension,t,.2);
+  padF.Q.setTargetAtTime(lerp(.7,7,tension),t,.3);
+  padB.frequency.setTargetAtTime(lerp(164.81,155.56,tension),t,.4); // fifth bends to tritone when unhealthy
 }
 
-/* ---------- playback ---------- */
+/* ---- image voices ---- */
+function initImageAudio(){
+  I.mel=bus(imgOut,0,.45);I.bass=bus(imgOut,0,.25);I.pad=bus(imgOut,0,.6);I.tex=bus(imgOut,.3,.1);
+  I.padF=ac.createBiquadFilter();I.padF.type="lowpass";I.padF.frequency.value=600;
+  I.padG=ac.createGain();I.padG.gain.value=0;I.padF.connect(I.padG);I.padG.connect(I.pad.in);
+  I.oscs=[0,1,2].map(i=>{const o=ac.createOscillator();o.type="triangle";o.frequency.value=220;o.detune.value=(i-1)*7;o.connect(I.padF);o.start();return o});
+  I.sub=ac.createOscillator();I.sub.type="sine";I.sub.frequency.value=110;I.subG=ac.createGain();I.subG.gain.value=0;
+  I.sub.connect(I.subG);I.subG.connect(I.bass.in);I.sub.start();
+  timers.push(setInterval(()=>{
+    if(!playing||mode!=="image"||!IM)return;
+    const now=ac.currentTime,sd=sweepDur/STEPS;
+    for(let guard=0;guard<16;guard++){
+      const t=imgT0+nextStep*sd;if(t>now+.12)break;
+      imgStep(nextStep,Math.max(t,now));nextStep++;
+      if(nextStep>=STEPS){nextStep=0;imgT0+=sweepDur}
+    }
+  },30));
+}
+function setImageKey(){
+  if(!ac||!IM)return;const k=IM.key,t=ac.currentTime,r=k.root+12;
+  [r,r+(k.minor?3:4),r+7].forEach((m,i)=>I.oscs[i].frequency.setTargetAtTime(mtof(m),t,.3));
+  I.sub.frequency.setTargetAtTime(mtof(k.root),t,.3);
+}
+function melodyMidi(c){return IM.key.scale[Math.round((1-c.row)*(IM.key.scale.length-1))]}
+function imgStep(k,t){
+  const an=IM.an,c=an.cols[k],g=an.g,key=IM.key,sd=sweepDur/STEPS;
+  I.padF.frequency.setTargetAtTime(300+2600*c.v,t,.15);
+  I.padG.gain.setTargetAtTime(onI.pad?.05+.1*g.sat*(.4+.6*c.v):0,t,.2);
+  I.subG.gain.setTargetAtTime(onI.bass?.3*c.dark:0,t,.2);
+  const stride=g.edge>.12?1:g.edge>.04?2:4;
+  if(onI.mel&&k%stride===0&&c.peak>.25){
+    const f=mtof(melodyMidi(c)),v=.05+.2*(.5*c.peak+.5*c.s),dur=Math.max(.5,sd*stride*1.8);
+    I.mel.pan.pan.setValueAtTime(-.8+1.6*k/(STEPS-1),t);
+    if(g.warmth>.15)pluck(I.mel.in,t,f,v,dur,500+3000*c.v);else voiceBell(I.mel.in,t,f,v,dur+.6);
+  }
+  if(onI.bass&&k%4===0&&c.peak>.15){
+    const d=Math.floor(c.hue/360*5)%5;soft(I.bass.in,t,mtof(key.root+key.iv[d]),.25,Math.max(.6,sd*4));
+  }
+  if(onI.tex&&c.e>Math.max(.1,g.edge*1.8))tickTo(I.tex.in,t,.05+.2*Math.min(1,c.e*2));
+}
+
+/* =============== data view =============== */
+function setLocation(key){
+  loc=DATA.locations[key];N=loc.times.length;idx=0;range={};
+  for(const t of TRACKS_D){const v=loc.series[t.id].filter(x=>x!=null);range[t.id]=[Math.min(...v),Math.max(...v)]}
+  updateNote();
+  const pm=loc.series.pm25;let hi=-1,lo=-1;
+  pm.forEach((v,i)=>{if(v==null)return;if(hi<0||v>pm[hi])hi=i;if(lo<0||v<pm[lo])lo=i});
+  $("chartdesc").textContent=`Line chart of four pollutants over ${N} hours, from ${fmtTime(0).d} to ${fmtTime(N-1).d}. `+
+    `PM2.5 ranges from ${Math.round(pm[lo])} to ${Math.round(pm[hi])} micrograms per cubic metre, lowest at ${fmtTime(lo).t} and highest at ${fmtTime(hi).t}. `+
+    `The WHO 24-hour guideline is 15.`;
+  $("now-desc").textContent=`${N} hours of surface air-quality model data for ${loc.name}, ${fmtTime(0).d} to ${fmtTime(N-1).d} (local time). `+
+    `Four pollutants play as four instruments. Dirtier air means faster, higher, brighter, and more tense sound.`;
+  draw();updateData();
+}
+function updateNote(){
+  if(mode!=="data"){$("note").textContent=rec&&rec.credit?"Credit: "+rec.credit:"";return}
+  $("note").textContent=`Data: ${DATA.meta.source}. ${loc.times[0]} to ${loc.times[N-1]} UTC. Surface-level area average. `+
+    (scaleMode==="ref"?"Each pollutant is scaled against a fixed health-oriented range (PM2.5 0–150 µg/m³, ozone 20–80 ppb, CO 100–1000 ppb, NO₂ 0–10 ppb). PM2.5 categories follow US EPA bands.":
+     "Each pollutant is scaled between its own lowest and highest value in this window.");
+}
+const rangeFor=id=>scaleMode==="ref"?REF[id]:range[id];
+function fmtTime(i){
+  const d=new Date(Date.parse(loc.times[Math.round(i)])+loc.tz_offset_min*60000);
+  const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  return {t:`${days[d.getUTCDay()]} ${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")}`,d:d.toISOString().slice(0,10)};
+}
+function valAtIdx(id,x){
+  const a=loc.series[id],i=Math.floor(x),f=x-i,v0=a[i],v1=a[Math.min(i+1,N-1)];
+  return v0==null?null:(v1==null?v0:v0+(v1-v0)*f);
+}
+const valAt=id=>valAtIdx(id,idx);
+function pmCat(v){return v<9.1?"good":v<35.5?"moderate":v<55.5?"unhealthy for sensitive groups":v<125.5?"unhealthy":v<225.5?"very unhealthy":"hazardous"}
+function updateData(){
+  const ft=fmtTime(idx);$("clock").innerHTML=`${ft.t}<small>${ft.d}, local time</small>`;
+  for(const t of TRACKS_D){
+    const v=valAt(t.id),[lo,hi]=rangeFor(t.id);
+    norm[t.id]=v==null||hi===lo?0:clamp((v-lo)/(hi-lo));
+    const el=cardEl[t.id];
+    el.querySelector(".n").textContent=v==null?"–":v.toFixed(t.id==="pm25"?0:1);
+    el.querySelector("small").textContent=DATA.units[t.id];
+    el.querySelector(".cat").textContent=v==null?"":t.id==="pm25"?pmCat(v):lvl(norm[t.id]);
+    el.querySelector(".meter i").style.width=(norm[t.id]*100)+"%";
+  }
+  const pv=valAt("pm25");tension=pv==null?0:clamp((pv-35)/90);
+  const sc=$("scrub");sc.value=idx/(N-1)*1000;sc.setAttribute("aria-valuetext",`${ft.t}, ${ft.d}`);
+  applyAudio();
+}
+const cv=$("chart"),cx=cv.getContext("2d");
+function draw(){
+  if(mode!=="data"||!loc)return;
+  const r=devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
+  cv.width=w*r;cv.height=h*r;cx.setTransform(r,0,0,r,0,0);cx.clearRect(0,0,w,h);
+  cx.strokeStyle=css("--line");cx.lineWidth=1;
+  for(let d=0;d<N;d++){const lt=new Date(Date.parse(loc.times[d])+loc.tz_offset_min*60000);
+    if(lt.getUTCHours()===0){const x=d/(N-1)*w;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke()}}
+  if(scaleMode==="ref"){const y=h-8-(15/150)*(h-16);cx.strokeStyle=css("--pm25");cx.globalAlpha=.7;cx.setLineDash([5,4]);
+    cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();cx.setLineDash([]);cx.globalAlpha=1;
+    cx.fillStyle=css("--pm25");cx.font="11px system-ui";cx.fillText("WHO PM2.5 guideline",6,y-4)}
+  for(const t of TRACKS_D){
+    const a=loc.series[t.id],[lo,hi]=rangeFor(t.id);
+    cx.strokeStyle=css(t.c);cx.globalAlpha=onD[t.id]?1:.25;cx.lineWidth=2;cx.beginPath();let pen=false;
+    a.forEach((v,i)=>{if(v==null){pen=false;return}
+      const x=i/(N-1)*w,y=h-8-clamp((v-lo)/((hi-lo)||1))*(h-16);pen?cx.lineTo(x,y):cx.moveTo(x,y);pen=true});
+    cx.stroke();
+  }
+  cx.globalAlpha=1;const px=idx/(N-1)*w;cx.strokeStyle=css("--text");cx.lineWidth=2;cx.beginPath();cx.moveTo(px,0);cx.lineTo(px,h);cx.stroke();
+}
+cv.onclick=e=>{if(mode!=="data")return;const b=cv.getBoundingClientRect();idx=clamp((e.clientX-b.left)/b.width)*(N-1);draw();updateData();dataSeeked()};
+function describeData(){
+  const v=valAt("pm25");if(v==null)return "No data at this moment.";
+  const prev=valAtIdx("pm25",Math.max(0,idx-6));let trend="";
+  if(prev!=null){const d=v-prev;trend=Math.abs(d)<Math.max(5,.1*prev)?", steady":d>0?", rising":", falling"}
+  return `${fmtTime(idx).t} local time. PM2.5 is ${Math.round(v)} micrograms per cubic metre, ${pmCat(v)}${trend}. `+
+    `Ozone ${lvl(norm.o3)}, carbon monoxide ${lvl(norm.co)}, nitrogen dioxide ${lvl(norm.no2)}. `+
+    (tension>.3?"The pad sounds tense and dissonant.":"The pad sounds calm.");
+}
+
+/* =============== image view =============== */
+const st=$("stage"),sx=st.getContext("2d");
+function drawImage(){
+  if(!IM)return;
+  const r=devicePixelRatio||1,w=st.clientWidth,h=Math.round(w*IM.h/IM.w);
+  if(st.width!==Math.round(w*r)||st.height!==Math.round(h*r)){st.width=Math.round(w*r);st.height=Math.round(h*r);st.style.height=h+"px"}
+  sx.setTransform(r,0,0,r,0,0);sx.drawImage(IM.src,0,0,w,h);
+  const k=Math.min(STEPS-1,Math.floor(ipos*STEPS)),c=IM.an.cols[k],x=ipos*w;
+  sx.fillStyle="rgba(0,0,0,.35)";sx.fillRect(x,0,w-x,h);
+  sx.strokeStyle="#fff";sx.lineWidth=2;sx.beginPath();sx.moveTo(x,0);sx.lineTo(x,h);sx.stroke();
+  sx.fillStyle=css("--acc");sx.strokeStyle="#000";sx.beginPath();sx.arc(x,c.row*h,6,0,7);sx.fill();sx.stroke();
+}
+st.onclick=e=>{if(mode!=="image")return;const b=st.getBoundingClientRect();setImagePos((e.clientX-b.left)/b.width)};
+function anchor(p,d=0){
+  imgT0=ac.currentTime+d-p*sweepDur;nextStep=Math.ceil(p*STEPS-1e-9);
+  if(nextStep>=STEPS){nextStep=0;imgT0+=sweepDur}
+}
+function setImagePos(p){
+  ipos=clamp(p);
+  if(playing&&ac){anchor(ipos,.12);seekCue()}else previewImage();
+  drawImage();updateImage();
+}
+let lastCue=0;
+function seekCue(){ // cut whatever is ringing, then restart cleanly from the new position
+  if(!ac||!playing)return;
+  const n=performance.now();if(n-lastCue<120)return;lastCue=n;
+  const t=ac.currentTime,out=mode==="data"?dataOut:imgOut;
+  out.gain.cancelScheduledValues(t);out.gain.setTargetAtTime(0,t,.008);out.gain.setTargetAtTime(1,t+.1,.015);
+  if(mode==="data"){if(onD.pm25)kickAt(t+.11);if(onD.o3)bellAt(t+.11);if(onD.no2)tickTo(G.no2,t+.14,.12+.25*norm.no2)}
+}
+function previewData(){ // hear the moment you scrub to, even when paused
+  const n=performance.now();if(n-lastCue<120)return;lastCue=n;
+  initAudio();ac.resume();const t=ac.currentTime;
+  dataOut.gain.setTargetAtTime(1,t,.02);applyAudio();
+  if(onD.pm25)kickAt(t+.03);if(onD.o3)bellAt(t+.03);if(onD.no2)tickTo(G.no2,t+.06,.12+.25*norm.no2);
+  clearTimeout(pvT);pvT=setTimeout(()=>{if(!playing)routeOutputs()},900);
+}
+const dataSeeked=()=>{if(playing)seekCue();else previewData()};
+function previewImage(){
+  if(!IM)return;initAudio();ac.resume();setImageKey();
+  imgOut.gain.setTargetAtTime(1,ac.currentTime,.02);
+  imgStep(Math.min(STEPS-1,Math.floor(ipos*STEPS)),ac.currentTime+.02);
+  clearTimeout(pvT);pvT=setTimeout(()=>{if(!playing)routeOutputs()},900);
+}
+function updateImage(){
+  if(!IM)return;
+  const k=Math.min(STEPS-1,Math.floor(ipos*STEPS)),c=IM.an.cols[k],m=melodyMidi(c);
+  const set=(id,txt,u,n)=>{const el=cardEl[id];el.querySelector(".n").textContent=txt;el.querySelector("small").textContent=u||"";
+    el.querySelector(".meter i").style.width=(clamp(n)*100)+"%"};
+  set("mel",c.peak>.25?noteName(m):"rest","",1-c.row);
+  cardEl.mel.querySelector(".cat").textContent=c.peak>.25?(c.row<.33?"high in the picture":c.row>.66?"low in the picture":"mid height"):"dark slice";
+  set("pad",IM.key.name,"",c.v);cardEl.pad.querySelector(".cat").textContent="filter "+lvl(c.v);
+  set("bass",Math.round(c.dark*100)+"%","dark",c.dark);cardEl.bass.querySelector(".cat").textContent=c.dark>.5?"sub tone is strong":"sub tone is quiet";
+  set("tex",Math.round(c.e*100)+"%","edges",c.e*3);cardEl.tex.querySelector(".cat").textContent=c.e>Math.max(.1,IM.an.g.edge*1.8)?"ticks sounding":"smooth here";
+  const sc=$("scrub");sc.value=ipos*1000;sc.setAttribute("aria-valuetext",Math.round(ipos*100)+" percent across the image");
+}
+function describeImagePos(){
+  const k=Math.min(STEPS-1,Math.floor(ipos*STEPS)),c=IM.an.cols[k],pct=Math.round(ipos*100);
+  if(c.peak<.25)return `${pct} percent across. Dark here, so the melody rests.`;
+  const where=c.row<.33?"near the top":c.row>.66?"near the bottom":"in the middle";
+  const tone=c.peak>.75?"Bright":c.peak<.4?"Dim":"Medium";
+  const m=melodyMidi(c);
+  return `${pct} percent across. ${tone} ${colorName(c.hue,Math.max(c.s,.2),Math.max(c.peak,.3))}, strongest ${where}. Melody note ${noteName(m)}, ${c.row<.33?"high":c.row>.66?"low":"middle"} pitch.`;
+}
+
+/* =============== cards =============== */
+function buildCards(list,flags){
+  const box=$("tracks");box.textContent="";
+  for(const t of list){
+    const d=document.createElement("div");d.className="track";d.style.setProperty("--c",`var(${t.c})`);
+    d.innerHTML=`<h3><span></span><button type="button" aria-pressed="true">On</button></h3><p></p>
+      <div class="val"><span class="n">–</span><small></small></div><div class="cat"></div><div class="meter"><i></i></div>`;
+    d.querySelector("h3 span").textContent=t.label;d.querySelector("p").textContent=t.how;
+    const b=d.querySelector("button");b.setAttribute("aria-label",`${t.label} instrument`);
+    b.onclick=()=>toggleTrack(list,flags,t.id);
+    box.appendChild(d);cardEl[t.id]=d;
+  }
+}
+function toggleTrack(list,flags,id){
+  flags[id]=!flags[id];const d=cardEl[id],b=d.querySelector("button");
+  b.textContent=flags[id]?"On":"Off";b.setAttribute("aria-pressed",flags[id]);d.classList.toggle("off",!flags[id]);
+  if(mode==="data"){applyAudio();draw()}
+}
+
+/* =============== announcements =============== */
+let liveT=0;
+function setLive(text){const el=$("live");clearTimeout(liveT);el.textContent="";liveT=setTimeout(()=>{el.textContent=text},40)}
+function describeNow(){return mode==="data"?describeData():mode==="image"&&IM?describeImagePos():"Choose a record first."}
+function maybeAnnounce(now){
+  if($("speak").checked&&now-lastSay>8000){lastSay=now;setLive(describeNow())}
+}
+
+/* =============== playback =============== */
+function setPlayBtn(){$("play").textContent=playing?"Pause":"Play";$("play").setAttribute("aria-label",playing?"Pause":"Play")}
 function start(){
-  if(!ac)initAudio();ac.resume();playing=true;last=performance.now();
-  $("play").textContent="Pause";requestAnimationFrame(loop);
+  if(!mode||(mode==="image"&&!IM))return;
+  initAudio();ac.resume();
+  if(mode==="image"){sweepDur=Number($("speed").value);setImageKey();}
+  playing=true;last=performance.now();lastSay=last;
+  if(mode==="image")anchor(ipos);
+  routeOutputs();setPlayBtn();
+  const my=++loopId;requestAnimationFrame(t=>loop(t,my));
 }
-function pause(){
-  playing=false;$("play").textContent="Play";
-  if(ac){for(const k in G)G[k].gain.setTargetAtTime(0,ac.currentTime,.05)}
+function pause(){playing=false;setPlayBtn();routeOutputs()}
+const togglePlay=()=>playing?pause():start();
+function loop(now,my){
+  if(!playing||my!==loopId)return;
+  if(mode==="data"){
+    idx+=(now-last)/1000*Number($("speed").value);last=now;
+    if(idx>=N-1)idx=0;
+    draw();updateData();
+  }else if(mode==="image"&&IM){
+    ipos=clamp((ac.currentTime-imgT0)/sweepDur);drawImage();updateImage();
+  }
+  maybeAnnounce(now);
+  requestAnimationFrame(t=>loop(t,my));
 }
-function loop(now){
-  if(!playing)return;
-  idx+=(now-last)/1000*Number($("speed").value);last=now;
-  if(idx>=N-1)idx=0;
-  draw();update();requestAnimationFrame(loop);
+function seekBy(f){
+  if(mode==="data"){idx=clamp(idx+f*(N-1),0,N-1);draw();updateData();dataSeeked()}
+  else if(mode==="image"&&IM)setImagePos(ipos+f);
+}
+function setSpeedOptions(){
+  const sp=$("speed"),lab=sp.closest("label"),txt=lab.firstChild;
+  sp.textContent="";
+  const opts=mode==="image"?[[32,"32 s sweep"],[16,"16 s sweep"],[8,"8 s sweep"],[4,"4 s sweep"]]:[[2,"2 h/s"],[4,"4 h/s"],[8,"8 h/s"],[16,"16 h/s"]];
+  for(const [v,l] of opts){const o=document.createElement("option");o.value=v;o.textContent=l;sp.appendChild(o)}
+  sp.value=mode==="image"?16:4;txt.textContent=mode==="image"?"Sweep ":"Speed ";
+}
+async function selectRecord(r,autoplay){
+  if(playing)pause();
+  rec=r;mode=r.kind;IM=null;
+  document.querySelectorAll(".rec").forEach(b=>b.setAttribute("aria-pressed",b.dataset.id===r.id?"true":"false"));
+  $("now-title").textContent=r.title;$("view-data").hidden=mode!=="data";$("view-image").hidden=mode!=="image";
+  $("scale-wrap").hidden=mode!=="data";$("scrub").disabled=true;$("play").disabled=true;setSpeedOptions();
+  if(mode==="data"){
+    buildCards(TRACKS_D,onD);setLocation(r.key);$("scrub").disabled=false;$("play").disabled=false;updateNote();
+  }else{
+    buildCards(TRACKS_I,onI);$("now-desc").textContent="Reading the image…";
+    try{
+      IM=await prepareImage(r);
+      if(rec!==r)return;
+      ipos=0;$("now-desc").textContent=IM.desc;$("stagedesc").textContent=IM.desc;
+      st.setAttribute("aria-label","Image: "+r.title+". A line sweeps across it from left to right while it plays. Click to jump.");
+      $("scrub").disabled=false;$("play").disabled=false;updateNote();drawImage();updateImage();
+      if(ac)setImageKey();
+    }catch(e){
+      $("now-desc").innerHTML="";const p=document.createElement("span");p.className="err";p.textContent=e.message;$("now-desc").appendChild(p);
+      setLive("This record could not be loaded. "+e.message);return;
+    }
+  }
+  setLive(`Selected ${r.title}. ${$("now-desc").textContent}`);
+  if(autoplay)start();
 }
 
-setLocation(Object.keys(DATA.locations)[0]);
+/* =============== wiring =============== */
+$("play").onclick=togglePlay;
+$("describe").onclick=()=>setLive(describeNow());
+$("speed").onchange=()=>{if(mode==="image"){const p=ipos;sweepDur=Number($("speed").value);if(playing&&ac)anchor(p)}};
+$("scale").onchange=e=>{scaleMode=e.target.value;updateNote();draw();updateData()};
+$("vol").oninput=e=>{if(master)master.gain.setTargetAtTime(Number(e.target.value),ac.currentTime,.03)};
+$("hc").onchange=e=>{document.body.classList.toggle("hc",e.target.checked);draw();drawImage()};
+$("scrub").oninput=e=>{
+  const p=e.target.value/1000;
+  if(mode==="data"){idx=p*(N-1);draw();updateData();dataSeeked()}else if(mode==="image")setImagePos(p);
+};
+addEventListener("resize",()=>{draw();drawImage()});
+addEventListener("keydown",e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  const tag=e.target.tagName;
+  if(tag==="SELECT"||tag==="TEXTAREA")return;
+  if(tag==="INPUT"&&e.target.type==="range"&&e.key.startsWith("Arrow"))return;
+  switch(e.key){
+    case " ":if(tag==="BUTTON"||tag==="INPUT"||tag==="SUMMARY")return;e.preventDefault();if(mode)togglePlay();break;
+    case "k":case "K":if(tag==="INPUT")return;if(mode)togglePlay();break;
+    case "ArrowLeft":e.preventDefault();seekBy(-.05*(e.shiftKey?4:1));break;
+    case "ArrowRight":e.preventDefault();seekBy(.05*(e.shiftKey?4:1));break;
+    case "ArrowUp":case "ArrowDown":{e.preventDefault();const v=$("vol");v.value=clamp(Number(v.value)+(e.key==="ArrowUp"?.05:-.05));v.oninput({target:v});break}
+    case "d":case "D":if(tag==="INPUT")return;setLive(describeNow());break;
+    case "1":case "2":case "3":case "4":{
+      if(!mode)break;const list=mode==="data"?TRACKS_D:TRACKS_I,t=list[Number(e.key)-1];
+      if(t)toggleTrack(list,mode==="data"?onD:onI,t.id);break}
+  }
+});
+
+setSpeedOptions();
+renderRecords();
+loadFrames();
+if(HAS_DATA)selectRecord(allRecords()[0],false);
 </script>
 </body>
 </html>
