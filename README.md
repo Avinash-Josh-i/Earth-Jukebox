@@ -61,3 +61,13 @@ Each location becomes a record automatically.
 
 ## Credits
 Air-quality data: NASA GMAO GEOS-CF. Image credits are shown on the page per record.
+
+## Guided tour and matching the picture to the numbers
+
+The **Guided tour** button plays a short sequence on its own: Reykjavik, Kathmandu, then the NASA air-quality frame. It uses whichever of those records exist, and any click on a record or on Play ends it.
+
+The NASA picture (SVS 5533, Air Quality Model Runs) shows **July-August 2024** from GEOS-CF. To hear the same model for the same months, add those months next to the winter records:
+
+    python fetch_data.py --start 2024-07-15 --end 2024-08-15 --label "Jul-Aug 2024" --merge
+
+`--only kathmandu,vancouver` limits it to some cities, and `--merge` keeps what is already in `data.js`.

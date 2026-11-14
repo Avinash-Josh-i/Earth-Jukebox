@@ -4,14 +4,19 @@ over each location's lat/lon box (surface level), and writes data.js for index.h
 
 Setup:   pip install xarray netCDF4 pandas numpy
 Run:     python fetch_data.py                      (last 7 days available)
-         python fetch_data.py --days 14
          python fetch_data.py --start 2026-01-01 --end 2026-01-07
          python fetch_data.py --url <your working OPeNDAP URL>
 
-To add a city later, add one entry to LOCATIONS. Global = a long list of boxes.
+Match the NASA picture: the SVS 5533 Air Quality animation shows July-August 2024 from GEOS-CF.
+Fetch the same months for the cities, and ADD them to data.js without losing what is there:
+         python fetch_data.py --start 2024-07-15 --end 2024-08-15 --label "Jul-Aug 2024" --merge
+         python fetch_data.py --only kathmandu,vancouver --start 2024-07-15 --end 2024-08-15 --label "Jul-Aug 2024" --merge
+
+To add a city, add one entry to LOCATIONS. Global = a long list of boxes.
 """
 import argparse
 import json
+import re
 from datetime import datetime, timezone
 
 import numpy as np
@@ -27,6 +32,12 @@ LOCATIONS = {
     "delhi": {"name": "Delhi", "lat": (28.4, 28.9), "lon": (76.9, 77.5), "tz_offset_min": 330},
     # a clean-air contrast: the jukebox shows one record per location listed here
     "reykjavik": {"name": "Reykjavik", "lat": (63.9, 64.3), "lon": (-22.3, -21.6), "tz_offset_min": 0},
+    # cities for the July-August 2024 window. Vancouver uses summer time (UTC-7).
+    "vancouver": {"name": "Vancouver", "lat": (49.0, 49.5), "lon": (-123.4, -122.7), "tz_offset_min": -420},
+    "mexico_city": {"name": "Mexico City", "lat": (19.2, 19.7), "lon": (-99.4, -98.8), "tz_offset_min": -360},
+    "sao_paulo": {"name": "Sao Paulo", "lat": (-24.0, -23.3), "lon": (-46.9, -46.3), "tz_offset_min": -180},
+    "beijing": {"name": "Beijing", "lat": (39.7, 40.2), "lon": (116.1, 116.8), "tz_offset_min": 480},
+    "lagos": {"name": "Lagos", "lat": (6.3, 6.8), "lon": (3.1, 3.7), "tz_offset_min": 60},
 }
 
 # track id -> GEOS-CF variable name
@@ -105,6 +116,20 @@ def extract(ds, loc, t0, t1):
     return times, out
 
 
+def slug(text):
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+def load_existing(path):
+    """Read an earlier data.js so new locations can be added to it."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        return json.loads(text[text.index("{"): text.rindex("}") + 1])
+    except (OSError, ValueError):
+        return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=DEFAULT_URL)
@@ -112,7 +137,15 @@ def main():
     ap.add_argument("--end")
     ap.add_argument("--days", type=int, default=7)
     ap.add_argument("--out", default="data.js")
+    ap.add_argument("--only", help="comma-separated location keys, e.g. kathmandu,vancouver")
+    ap.add_argument("--label", help='names this time window, e.g. "Jul-Aug 2024"; added to each record title')
+    ap.add_argument("--merge", action="store_true", help="add to the existing data.js instead of replacing it")
     args = ap.parse_args()
+
+    wanted = [k.strip() for k in args.only.split(",")] if args.only else list(LOCATIONS)
+    unknown = [k for k in wanted if k not in LOCATIONS]
+    if unknown:
+        ap.error("unknown location(s): " + ", ".join(unknown) + ". Known: " + ", ".join(LOCATIONS))
 
     ds = xr.open_dataset(args.url, engine="netcdf4")
     print("Dataset time range:", ds.time.values[0], "->", ds.time.values[-1])
@@ -123,19 +156,20 @@ def main():
     if t0 > t1:
         ap.error("--start must be earlier than or equal to --end")
 
-    result = {
-        "meta": {
-            "source": "NASA GMAO GEOS-CF via OPeNDAP",
-            "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        },
-        "units": UNITS,
-        "locations": {},
+    result = (load_existing(args.out) if args.merge else None) or {"locations": {}}
+    result["meta"] = {
+        "source": "NASA GMAO GEOS-CF via OPeNDAP",
+        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    for key, loc in LOCATIONS.items():
-        print(f"Fetching {loc['name']} ...")
+    result["units"] = UNITS
+    for key in wanted:
+        loc = LOCATIONS[key]
+        out_key = key + ("_" + slug(args.label) if args.label else "")
+        name = loc["name"] + (", " + args.label if args.label else "")
+        print(f"Fetching {name} ...")
         times, series = extract(ds, loc, t0, t1)
-        result["locations"][key] = {
-            "name": loc["name"],
+        result["locations"][out_key] = {
+            "name": name,
             "tz_offset_min": loc["tz_offset_min"],
             "times": [format_timestamp(t) for t in times],
             "series": series,
@@ -144,7 +178,7 @@ def main():
 
     with open(args.out, "w", encoding="utf-8") as f:
         f.write("window.JUKEBOX_DATA = " + json.dumps(result) + ";\n")
-    print("Wrote", args.out)
+    print("Wrote", args.out, "with", len(result["locations"]), "locations")
 
 
 if __name__ == "__main__":

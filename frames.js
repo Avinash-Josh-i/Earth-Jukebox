@@ -19,8 +19,8 @@ window.JUKEBOX_FRAMES = [
     id: "air-quality",
     title: "Air Quality Model Runs",
     src: "frames/air-quality.png",
-    blurb: "A globe split into PM2.5, nitrogen oxides and ozone.",
-    description: "A globe seen over the Americas, cut into three vertical slices on a white background, each labelled in a small rounded box. On the left, in yellow and orange, is fine particle pollution (PM2.5), with darker orange smoke near the top left over western North America. In the middle, in bright green, are nitrogen oxides, with dark spots over cities and coasts and white and black patches towards the south. On the right, in purple and grey, is ozone, with soft swirls. Colours are smooth, with sharp edges only where the slices meet.",
+    blurb: "NASA's air-quality model for July-August 2024, one pollutant per slice.",
+    description: "A globe seen over the Americas, cut into three vertical slices on a white background, each labelled in a small rounded box. On the left, in yellow and orange, is fine particle pollution (PM2.5), with darker orange smoke near the top left over western North America. In the middle, in bright green, are nitrogen oxides, with dark spots over cities and coasts and white and black patches towards the south. On the right, in purple and grey, is ozone, with soft swirls. Colours are smooth, with sharp edges only where the slices meet. This is one frame of NASA's Air Quality Model Runs animation, which follows pollution through July and August 2024, an active wildfire season in North America.",
     credit: "NASA's Scientific Visualization Studio / GMAO, GEOS-CF model. Visualization: Helen-Nicole Kostis (USRA), Joseph V. Ardizzone (NASA/GSFC); scientist: Lesley Ott (NASA/GSFC). svs.gsfc.nasa.gov/5533"
   },
   {

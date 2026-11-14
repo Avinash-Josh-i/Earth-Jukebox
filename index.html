@@ -58,6 +58,8 @@
   details kbd{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 6px;font:inherit;font-size:.85em}
   .note{color:var(--mute);font-size:.82rem;margin-top:22px}
   .err{color:#ffb3a8}
+  .tourbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:12px 0}
+  .tourbar span{flex:1 1 280px}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -67,6 +69,8 @@
   <header>
     <h1>Earth Jukebox</h1>
     <p class="sub">Pick a record and hear the planet. Each record turns NASA Earth data or an Earth image into sound, with text descriptions and keyboard controls so it can be explored without sight.</p>
+    <button type="button" class="play" id="tour">Guided tour (about 40 seconds)</button>
+    <div id="tourbar" class="tourbar" hidden><span id="tourtxt"></span><button type="button" id="tourstop">Stop tour</button></div>
   </header>
 
   <section aria-labelledby="rec-h">
@@ -628,7 +632,7 @@ function start(){
   const my=++loopId;requestAnimationFrame(t=>loop(t,my));
 }
 function pause(){playing=false;setPlayBtn();routeOutputs()}
-const togglePlay=()=>playing?pause():start();
+const togglePlay=()=>{stopTour();playing?pause():start()};
 function loop(now,my){
   if(!playing||my!==loopId)return;
   if(mode==="data"){
@@ -652,7 +656,8 @@ function setSpeedOptions(){
   for(const [v,l] of opts){const o=document.createElement("option");o.value=v;o.textContent=l;sp.appendChild(o)}
   sp.value=mode==="image"?16:4;txt.textContent=mode==="image"?"Sweep ":"Speed ";
 }
-async function selectRecord(r,autoplay){
+async function selectRecord(r,autoplay,fromTour){
+  if(!fromTour)stopTour();
   if(playing)pause();
   rec=r;mode=r.kind;IM=null;
   document.querySelectorAll(".rec").forEach(b=>b.setAttribute("aria-pressed",b.dataset.id===r.id?"true":"false"));
@@ -677,6 +682,44 @@ async function selectRecord(r,autoplay){
   setLive(`Selected ${r.title}. ${$("now-desc").textContent}`);
   if(autoplay)start();
 }
+
+/* =============== guided tour =============== */
+let tourId=0,tourT=0;
+function tourSteps(){
+  const L=allRecords(),data=re=>L.find(r=>r.kind==="data"&&re.test(r.key));
+  const img=L.find(r=>r.kind==="image"&&/air/i.test(r.id))||L.find(r=>r.kind==="image"&&r.id!=="user");
+  const s=[],add=(rec,dur,say)=>{if(rec)s.push({rec,dur,say})};
+  add(data(/reykjav/i),10,"Reykjavik, a clean-air reference city. Notice how slow and low it sounds.");
+  add(data(/kathmandu/i),12,"Kathmandu Valley. As fine particles rise, the drum speeds up and the bell climbs.");
+  add(img,16,"Now a NASA Earth Information Center picture of the air-quality model. A line sweeps across it and turns colour into sound.");
+  return s;
+}
+function stopTour(say){
+  if(!tourId)return;tourId=0;clearTimeout(tourT);$("tourbar").hidden=true;$("tour").disabled=false;
+  if(say)setLive(say);
+}
+function tourSpeed(sec){ // one full pass of the window or image in `sec` seconds (data pace capped so it stays listenable)
+  const sp=$("speed");let o=sp.querySelector("option[data-tour]");
+  if(!o){o=document.createElement("option");o.dataset.tour="1";sp.appendChild(o)}
+  o.value=String(mode==="data"?Math.min((N-1)/sec,24):sec);o.textContent="Tour pace";sp.value=o.value;
+}
+async function runTour(){
+  stopTour();
+  const steps=tourSteps();
+  if(!steps.length){setLive("There is nothing to tour yet. Load the data or frames first.");return}
+  const my=++tourId;$("tour").disabled=true;$("tourbar").hidden=false;
+  for(const s of steps){
+    if(my!==tourId)return;
+    $("tourtxt").textContent=s.say;
+    await selectRecord(s.rec,false,true);
+    if(my!==tourId)return;
+    tourSpeed(s.dur);start();setLive(s.say);
+    await new Promise(res=>{tourT=setTimeout(res,s.dur*1000)});
+  }
+  if(my===tourId){pause();stopTour("Tour finished. Choose any record to keep exploring.")}
+}
+$("tour").onclick=runTour;
+$("tourstop").onclick=()=>{stopTour("Tour stopped.");if(playing)pause()};
 
 /* =============== wiring =============== */
 $("play").onclick=togglePlay;
