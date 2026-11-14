@@ -163,14 +163,14 @@ const STEPS=64;
 let scaleMode="ref";
 const REF={pm25:[0,150],o3:[20,80],co:[100,1000],no2:[0,10]};          // fixed, health-oriented ranges
 const norm={pm25:0,o3:0,co:0,no2:0};
-let tension=0;
+let tension=0,band=0,locT=[];
 const onD={pm25:true,o3:true,co:true,no2:true};
 const onI={mel:true,pad:true,bass:true,tex:true};
 
 const TRACKS_D=[
-  {id:"pm25",label:"PM2.5",how:"Kick drum, left of centre. Hits faster and harder when dirtier.",c:"--pm25"},
+  {id:"pm25",label:"PM2.5",how:"Kick drum on a steady beat, left of centre. The beat subdivides at each EPA health threshold and hits harder when dirtier. A quiet click marks the WHO-guideline beat.",c:"--pm25"},
   {id:"o3",label:"Ozone",how:"Bell, left ear. Higher pitch when higher.",c:"--o3"},
-  {id:"co",label:"Carbon monoxide",how:"Pad. Louder and brighter.",c:"--co"},
+  {id:"co",label:"Carbon monoxide",how:"Pad. Louder and brighter with more CO. Its chord follows the PM2.5 health band, from calm major to dissonant.",c:"--co"},
   {id:"no2",label:"Nitrogen dioxide",how:"Ticks, right ear. Faster when higher.",c:"--no2"},
 ];
 const TRACKS_I=[
@@ -317,7 +317,7 @@ async function prepareImage(r){
 }
 
 /* =============== audio =============== */
-let master,dataOut,imgOut,revIn,revOut,noiseBuf,G={},I={},padA,padB,padF,timers=[];
+let master,dataOut,imgOut,revIn,revOut,noiseBuf,G={},I={},padA,padB,padC,padF,timers=[];
 const SCALE=[220,261.63,293.66,329.63,392,440,523.25,587.33,659.25,783.99]; // A minor pentatonic
 function bus(dest,pan,wet){
   const g=ac.createGain(),p=ac.createStereoPanner();p.pan.value=pan;g.connect(p);p.connect(dest);
@@ -374,13 +374,23 @@ function soft(dest,t,f,v,dur){
 
 /* ---- data voices ---- */
 function initDataAudio(){
-  const b={pm25:bus(dataOut,-.1,0),o3:bus(dataOut,-.5,.5),co:bus(dataOut,0,.6),no2:bus(dataOut,.5,.12)};
+  const b={pm25:bus(dataOut,-.1,0),o3:bus(dataOut,-.5,.5),co:bus(dataOut,0,.6),no2:bus(dataOut,.5,.12),ref:bus(dataOut,.1,0),day:bus(dataOut,0,.6)};
   for(const k in b){G[k]=b[k].in;G[k].gain.value=0}
   padF=ac.createBiquadFilter();padF.type="lowpass";padF.frequency.value=400;
-  padA=ac.createOscillator();padB=ac.createOscillator();padA.type=padB.type="triangle";
-  padA.frequency.value=110;padB.frequency.value=164.81;padB.detune.value=6;
-  padA.connect(padF);padB.connect(padF);padF.connect(G.co);padA.start();padB.start();
-  schedule(()=>mode==="data"&&onD.pm25,()=>lerp(1.1,.22,norm.pm25),kickAt);
+  padA=ac.createOscillator();padB=ac.createOscillator();padC=ac.createOscillator();padA.type=padB.type=padC.type="triangle";
+  padA.frequency.value=110;padB.frequency.value=mtof(57+4);padC.frequency.value=mtof(57+7);padB.detune.value=6;padC.detune.value=-5;
+  padA.connect(padF);padB.connect(padF);padC.connect(padF);padF.connect(G.co);padA.start();padB.start();padC.start();
+  // PM2.5 beat: kick and WHO click share one grid of 12 steps per beat, so the kick locks to the click at every subdivision
+  let gN=0,gNext=0;
+  timers.push(setInterval(()=>{
+    if(!playing||mode!=="data"||!onD.pm25){gNext=0;return}
+    if(gNext<ac.currentTime){gNext=ac.currentTime+.05;gN=0}
+    while(gNext<ac.currentTime+.12){
+      if(gN%12===0)refAt(gNext);
+      if(gN%Math.round(12/PM_HITS[band])===0)kickAt(gNext);
+      gNext+=BEAT/12;gN++;
+    }
+  },30));
   schedule(()=>mode==="data"&&onD.no2,()=>lerp(.55,.09,norm.no2),t=>tickTo(G.no2,t,.12+.25*norm.no2));
   schedule(()=>mode==="data"&&onD.o3,()=>.8,bellAt);
 }
@@ -398,16 +408,26 @@ function kickAt(t){
   g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+.28);
   o.connect(g);g.connect(G.pm25);o.start(t);o.stop(t+.3);
 }
+function refAt(t){ // quiet click on every beat: the pulse at which the kick plays once per beat (EPA "moderate")
+  const o=ac.createOscillator(),g=ac.createGain();o.type="sine";o.frequency.value=1200;
+  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.09,t+.003);g.gain.exponentialRampToValueAtTime(.0005,t+.06);
+  o.connect(g);g.connect(G.ref);o.start(t);o.stop(t+.08);
+}
+function dayChime(t){soft(G.day,t,110,.35,2.4);soft(G.day,t,220,.18,1.6)} // soft low note when a new local day begins
 function bellAt(t){voiceBell(G.o3,t,SCALE[Math.round(norm.o3*(SCALE.length-1))],.07+.22*norm.o3,1.6)}
 function applyAudio(){
   if(!ac||mode!=="data")return;const t=ac.currentTime;
   G.pm25.gain.setTargetAtTime(onD.pm25?.9:0,t,.05);
   G.no2.gain.setTargetAtTime(onD.no2?.7:0,t,.05);
   G.o3.gain.setTargetAtTime(onD.o3?1:0,t,.05);
-  G.co.gain.setTargetAtTime(onD.co?.05+.2*norm.co:0,t,.2);
+  G.ref.gain.setTargetAtTime(onD.pm25?.6:0,t,.05);
+  G.day.gain.setTargetAtTime(.8,t,.05);
+  G.co.gain.setTargetAtTime(onD.co?.04+.14*norm.co:0,t,.2);
   padF.frequency.setTargetAtTime(220+1800*norm.co+900*tension,t,.2);
   padF.Q.setTargetAtTime(lerp(.7,7,tension),t,.3);
-  padB.frequency.setTargetAtTime(lerp(164.81,155.56,tension),t,.4); // fifth bends to tritone when unhealthy
+  const ch=PM_CHORDS[band].iv; // chord follows the EPA band, always on the fixed health scale (not the Scale setting)
+  padB.frequency.setTargetAtTime(mtof(57+ch[0]),t,.15);
+  padC.frequency.setTargetAtTime(mtof(57+ch[1]),t,.15);
 }
 
 /* ---- image voices ---- */
@@ -453,7 +473,7 @@ function imgStep(k,t){
 
 /* =============== data view =============== */
 function setLocation(key){
-  loc=DATA.locations[key];N=loc.times.length;idx=0;range={};
+  loc=DATA.locations[key];N=loc.times.length;idx=0;range={};locT=loc.times.map(x=>Date.parse(x));
   for(const t of TRACKS_D){const v=loc.series[t.id].filter(x=>x!=null);range[t.id]=[Math.min(...v),Math.max(...v)]}
   updateNote();
   const pm=loc.series.pm25;let hi=-1,lo=-1;
@@ -462,7 +482,7 @@ function setLocation(key){
     `PM2.5 ranges from ${Math.round(pm[lo])} to ${Math.round(pm[hi])} micrograms per cubic metre, lowest at ${fmtTime(lo).t} and highest at ${fmtTime(hi).t}. `+
     `The WHO 24-hour guideline is 15.`;
   $("now-desc").textContent=`${N} hours of surface air-quality model data for ${loc.name}, ${fmtTime(0).d} to ${fmtTime(N-1).d} (local time). `+
-    `Four pollutants play as four instruments. Dirtier air means faster, higher, brighter, and more tense sound.`;
+    `Four pollutants play as four instruments. PM2.5 sets the chord and the beat by EPA health band: calmer and slower when clean, more tense and busier when dirty. A soft low note marks each new day.`;
   draw();updateData();
 }
 function updateNote(){
@@ -482,7 +502,22 @@ function valAtIdx(id,x){
   return v0==null?null:(v1==null?v0:v0+(v1-v0)*f);
 }
 const valAt=id=>valAtIdx(id,idx);
-function pmCat(v){return v<9.1?"good":v<35.5?"moderate":v<55.5?"unhealthy for sensitive groups":v<125.5?"unhealthy":v<225.5?"very unhealthy":"hazardous"}
+// US EPA PM2.5 bands. Each band has its own chord (pad) and beat subdivision (kick), so crossing a threshold is audible.
+const PM_BREAKS=[9.1,35.5,55.5,125.5,225.5];
+const PM_NAMES=["good","moderate","unhealthy for sensitive groups","unhealthy","very unhealthy","hazardous"];
+const PM_CHORDS=[
+  {name:"a calm major chord",iv:[4,7]},
+  {name:"an open, floating chord",iv:[2,7]},
+  {name:"a minor chord",iv:[3,7]},
+  {name:"a diminished chord",iv:[3,6]},
+  {name:"a harsh, clashing chord",iv:[1,6]},
+  {name:"a dense, dissonant cluster",iv:[1,11]},
+];
+const PM_HITS=[.5,1,2,3,4,6];   // kick hits per beat: whole, quarter, eighth, triplet, sixteenth, sextuplet
+const BEAT=1;                    // seconds per beat; the quiet click marks it, the kick subdivides it
+const pmBand=v=>{let i=0;while(i<PM_BREAKS.length&&v>=PM_BREAKS[i])i++;return i};
+const pmCat=v=>PM_NAMES[pmBand(v)];
+const dayAt=x=>Math.floor((locT[Math.min(N-1,Math.floor(x))]+loc.tz_offset_min*60000)/864e5);
 function updateData(){
   const ft=fmtTime(idx);$("clock").innerHTML=`${ft.t}<small>${ft.d}, local time</small>`;
   for(const t of TRACKS_D){
@@ -494,7 +529,7 @@ function updateData(){
     el.querySelector(".cat").textContent=v==null?"":t.id==="pm25"?pmCat(v):lvl(norm[t.id]);
     el.querySelector(".meter i").style.width=(norm[t.id]*100)+"%";
   }
-  const pv=valAt("pm25");tension=pv==null?0:clamp((pv-35)/90);
+  const pv=valAt("pm25");tension=pv==null||pv<=9?0:clamp(Math.log(pv/9)/Math.log(250/9));band=pv==null?0:pmBand(pv);
   const sc=$("scrub");sc.value=idx/(N-1)*1000;sc.setAttribute("aria-valuetext",`${ft.t}, ${ft.d}`);
   applyAudio();
 }
@@ -525,7 +560,7 @@ function describeData(){
   if(prev!=null){const d=v-prev;trend=Math.abs(d)<Math.max(5,.1*prev)?", steady":d>0?", rising":", falling"}
   return `${fmtTime(idx).t} local time. PM2.5 is ${Math.round(v)} micrograms per cubic metre, ${pmCat(v)}${trend}. `+
     `Ozone ${lvl(norm.o3)}, carbon monoxide ${lvl(norm.co)}, nitrogen dioxide ${lvl(norm.no2)}. `+
-    (tension>.3?"The pad sounds tense and dissonant.":"The pad sounds calm.");
+    `The pad plays ${PM_CHORDS[band].name} and the kick plays ${PM_HITS[band]<1?"once every two beats":PM_HITS[band]===1?"once per beat":PM_HITS[band]+" times per beat"}.`;
 }
 
 /* =============== image view =============== */
@@ -636,8 +671,9 @@ const togglePlay=()=>{stopTour();playing?pause():start()};
 function loop(now,my){
   if(!playing||my!==loopId)return;
   if(mode==="data"){
+    const d0=dayAt(idx);
     idx+=(now-last)/1000*Number($("speed").value);last=now;
-    if(idx>=N-1)idx=0;
+    if(idx>=N-1)idx=0;else if(dayAt(idx)!==d0)dayChime(ac.currentTime);
     draw();updateData();
   }else if(mode==="image"&&IM){
     ipos=clamp((ac.currentTime-imgT0)/sweepDur);drawImage();updateImage();

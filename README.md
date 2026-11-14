@@ -15,7 +15,7 @@ then open http://localhost:8000. A local server is needed so the browser may rea
 
 | Kind | What it is | How it becomes sound |
 |---|---|---|
-| **Air over a city** | Hourly NASA GEOS-CF surface PM2.5, ozone, CO and NO₂ (via `fetch_data.py` → `data.js`) | PM2.5 = kick drum, ozone = bell on a pentatonic scale, CO = pad, NO₂ = ticks |
+| **Air over a city** | Hourly NASA GEOS-CF surface PM2.5, ozone, CO and NO₂ (via `fetch_data.py` → `data.js`) | PM2.5 health band = chord and beat, ozone = bell pitch, CO = pad, NO₂ = ticks (details below) |
 | **NASA EIC frame** | Any image you list in `frames.js` | The picture is scanned left to right as a score (below) |
 | **Your own image** | Chosen with the file button | Same as above |
 
@@ -28,8 +28,10 @@ then open http://localhost:8000. A local server is needed so the browser may rea
 - Drag the position slider while paused to hear any slice (tactile-style exploration by sound).
 
 ### Air → sound rules
-- Fixed, health-oriented scales by default (PM2.5 0–150 µg/m³, ozone 20–80 ppb, CO 100–1000 ppb, NO₂ 0–10 ppb), so a clean week and a polluted week sound different. "This window only" rescales to the data shown.
-- When PM2.5 enters the unhealthy range the calm fifth in the pad bends towards a tense tritone and the filter sharpens.
+- **Health bands drive the harmony and the beat.** PM2.5 is placed in its US EPA band (good, moderate, unhealthy for sensitive groups, unhealthy, very unhealthy, hazardous). Each band has its own pad chord (calm major, open, minor, diminished, clashing, dense cluster) and its own kick subdivision (once per two beats, then 1, 2, 3, 4 and 6 hits per beat). Crossing a threshold is a clear step in the sound, not a slow slide. Bands always use the fixed health scale, whatever the Scale setting is.
+- **A quiet click marks the beat** (one per second). The kick locks to it on a shared grid, so "twice as fast" is heard as a rhythm. The WHO 24-hour guideline (15 µg/m³) falls in the calmest bands, so the click is the "clean air" reference to compare against.
+- Within a band, PM2.5 sets kick loudness; ozone = bell pitch on a pentatonic scale, CO = pad loudness and brightness, NO₂ = tick rate. These four use the Scale setting: fixed health-oriented ranges (PM2.5 0–150 µg/m³, ozone 20–80 ppb, CO 100–1000 ppb, NO₂ 0–10 ppb) by default, or "This window only" to rescale to the data shown.
+- A soft low note plays when a new local day begins, so the daily rhythm of the pollution can be heard.
 - The chart marks the WHO 24-hour PM2.5 guideline (15 µg/m³). PM2.5 category names follow US EPA bands.
 
 ## Accessibility
