@@ -39,7 +39,10 @@ then open http://localhost:8000. A local server is needed so the browser may rea
 - Labelled controls, `aria-pressed` toggles, `aria-valuetext` on the position slider, skip link, visible focus, text alternative for the chart, high-contrast mode.
 
 ## Adding NASA EIC frames
-1. Save a frame from an EIC visualization into `frames/`.
+Three real frames ship in `frames.js`: **Air Quality Model Runs** (SVS 5533), **Global temperature anomaly 2024** (SVS 5450) and **Arctic Sea Ice Minimum 2024** (SVS 5382), chosen to look very different (dark glowing plumes, smooth red/blue map, white-on-blue polar scene). Run `python get_frames.py` once to download them into `frames/`.
+
+To add more:
+1. Save a frame from an EIC or SVS visualization into `frames/`.
 2. Add an entry to `frames.js` (title, path, one-line blurb, a short written description for blind users, credit).
 3. Reload. Entries that cannot be loaded are skipped.
 
@@ -51,6 +54,7 @@ Each location becomes a record automatically.
 - `index.html`: the whole app (Web Audio synthesis, image analysis, UI)
 - `data.js`: generated air-quality data
 - `frames.js`: list of EIC images
+- `get_frames.py`: downloads the listed frames from NASA SVS into `frames/`
 - `fetch_data.py`: pulls GEOS-CF data from NASA OPeNDAP
 
 ## Credits
