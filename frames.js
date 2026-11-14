@@ -19,8 +19,8 @@ window.JUKEBOX_FRAMES = [
     id: "air-quality",
     title: "Air Quality Model Runs",
     src: "frames/air-quality.png",
-    blurb: "Smoke and pollution drifting across Earth, July-August 2024.",
-    description: "A dark globe seen from space with the continents faintly outlined. Glowing swirls of colour trace pollutants from NASA's GEOS-CF model (carbon monoxide, fine particles, ozone and nitrogen oxides) as they stream across North America during the 2024 wildfire season. Bright, dense patches mark heavy pollution; thin, soft filaments mark light pollution drifting downwind.",
+    blurb: "A globe split into PM2.5, nitrogen oxides and ozone.",
+    description: "A globe seen over the Americas, cut into three vertical slices on a white background, each labelled in a small rounded box. On the left, in yellow and orange, is fine particle pollution (PM2.5), with darker orange smoke near the top left over western North America. In the middle, in bright green, are nitrogen oxides, with dark spots over cities and coasts and white and black patches towards the south. On the right, in purple and grey, is ozone, with soft swirls. Colours are smooth, with sharp edges only where the slices meet.",
     credit: "NASA's Scientific Visualization Studio / GMAO, GEOS-CF model. Visualization: Helen-Nicole Kostis (USRA), Joseph V. Ardizzone (NASA/GSFC); scientist: Lesley Ott (NASA/GSFC). svs.gsfc.nasa.gov/5533"
   },
   {

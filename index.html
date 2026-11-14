@@ -304,7 +304,7 @@ function describeImageGlobal(an,key){
 async function prepareImage(r){
   const src=await getSource(r),sw=src.naturalWidth||src.width,sh=src.naturalHeight||src.height;
   const w=Math.min(192,sw),h=Math.max(8,Math.round(w*sh/sw)),c=document.createElement("canvas");c.width=w;c.height=h;
-  const g=c.getContext("2d",{willReadFrequently:true});g.drawImage(src,0,0,w,h);
+  const g=c.getContext("2d",{willReadFrequently:true});g.fillStyle="#fff";g.fillRect(0,0,w,h);g.drawImage(src,0,0,w,h);
   let px;try{px=g.getImageData(0,0,w,h).data}catch(e){
     throw new Error("The browser blocked reading this image's pixels. This happens when the page is opened straight from a file. Run  python -m http.server  in the project folder and open http://localhost:8000 instead.");}
   const an=analyze(px,w,h),key=buildKey(an.g);

@@ -41,6 +41,8 @@ then open http://localhost:8000. A local server is needed so the browser may rea
 ## Adding NASA EIC frames
 Three real frames ship in `frames.js`: **Air Quality Model Runs** (SVS 5533), **Global temperature anomaly 2024** (SVS 5450) and **Arctic Sea Ice Minimum 2024** (SVS 5382), chosen to look very different (dark glowing plumes, smooth red/blue map, white-on-blue polar scene). Run `python get_frames.py` once to download them into `frames/`.
 
+The Air Quality visualization is a numbered image sequence. Pick a few frames with e.g. `python get_frames.py --sequence 0,150,300,450` (each is about 8 MB at full size; install Pillow with `pip install pillow` and they are shrunk to 1920x1080). The script prints a `frames.js` entry for each one. Write a short description of what the frame shows before publishing.
+
 To add more:
 1. Save a frame from an EIC or SVS visualization into `frames/`.
 2. Add an entry to `frames.js` (title, path, one-line blurb, a short written description for blind users, credit).
