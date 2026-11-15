@@ -45,6 +45,20 @@ Three real frames ship in `frames.js`: **Air Quality Model Runs** (SVS 5533), **
 
 The Air Quality visualization is a numbered image sequence. Pick a few frames with e.g. `python get_frames.py --sequence 0,150,300,450` (each is about 8 MB at full size; install Pillow with `pip install pillow` and they are shrunk to 1920x1080). The script prints a `frames.js` entry for each one. Write a short description of what the frame shows before publishing.
 
+To extract frames from the visualization page itself, use its SVS ID. The script reads the page API, discovers the published frame directory, and downloads only the requested frames:
+
+    python get_frames.py --svs-id 5533 --sequence 0,150,300,450
+
+SVS 5533 publishes more than one frame set. Select the flat map instead of the default sphere sequence with:
+
+    python get_frames.py --svs-id 5533 --frame-set MapWithLabels --sequence 0,150,300
+
+For another EIC or SVS image, pass its direct image URL and the local filename:
+
+    python get_frames.py --image "earth-system.png=https://svs.gsfc.nasa.gov/vis/a000000/a005500/example.png"
+
+Repeat `--image` to fetch several images. The downloader skips files already present, and prints an entry to copy into `frames.js`.
+
 To add more:
 1. Save a frame from an EIC or SVS visualization into `frames/`.
 2. Add an entry to `frames.js` (title, path, one-line blurb, a short written description for blind users, credit).

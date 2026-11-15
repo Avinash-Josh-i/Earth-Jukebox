@@ -251,11 +251,18 @@ async function renderRecords(){
   }
 }
 async function loadFrames(){
-  const list=window.JUKEBOX_FRAMES||[];
-  const res=await Promise.allSettled(list.map(async f=>{await loadImage(f.src);
+  const list=window.JUKEBOX_FRAMES||[],bad=[];
+  const res=await Promise.allSettled(list.map(async f=>{
+    try{await loadImage(f.src)}catch(e){bad.push(f.src);throw e}
     return {id:"frame-"+f.id,kind:"image",tag:"Image · NASA EIC",title:f.title,blurb:f.blurb||"",src:f.src,description:f.description||"",credit:f.credit||"NASA Earth Information Center"};}));
   frameRecs=res.filter(x=>x.status==="fulfilled").map(x=>x.value);
-  $("frames-note").hidden=frameRecs.length>0;
+  const note=$("frames-note");
+  note.hidden=frameRecs.length>0&&!bad.length;
+  if(!note.hidden){ // say exactly what went wrong instead of a generic message
+    note.textContent=!list.length
+      ?"frames.js was loaded but lists no frames (window.JUKEBOX_FRAMES is "+(window.JUKEBOX_FRAMES?"empty":"missing")+"). If frames.js has entries, your browser is probably using an old cached copy: press Ctrl+Shift+R, or start the page with  python serve.py."
+      :"Could not load: "+bad.join(", ")+". Check that these files exist next to index.html and that the page is opened from http://localhost, not from a file.";
+  }
   renderRecords();
 }
 $("file").onchange=e=>{
