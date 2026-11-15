@@ -304,6 +304,7 @@ def main():
             "country": city.get("country", ""),
             "lat": city["lat"],
             "lon": city["lon"],
+            "tz": city.get("tz"),        // IANA zone, e.g. "Asia/Kathmandu"
             "tz_offset_min": utc_offset_minutes(city, mid),
         }
         for k in ("t0", "step_min", "n", "times"):

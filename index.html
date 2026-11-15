@@ -519,9 +519,31 @@ function updateNote(){
 }
 const rangeFor=id=>scaleMode==="ref"?REF[id]:range[id];
 function fmtTime(i){
-  const d=new Date(Date.parse(loc.times[Math.round(i)])+loc.tz_offset_min*60000);
-  const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  return {t:`${days[d.getUTCDay()]} ${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")}`,d:d.toISOString().slice(0,10)};
+  const ts=Date.parse(loc.times[Math.round(i)]);
+  return formatTime(ts,loc.tz,loc.tz_offset_min);
+}
+// Format an epoch timestamp in a time zone (IANA name when available, else a fixed
+// minute offset). Returns {t:"Sun 11:30", d:"2025-12-26"} in local time.
+function formatTime(epochMs,tz,offsetMin){
+  const date=new Date(epochMs);
+  let t,d;
+  if(tz){
+    try{
+      const tf=new Intl.DateTimeFormat("en-US",{weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false,timeZone:tz});
+      const p=tf.formatToParts(date);const get=(n)=>{const f=p.find(x=>x.type===n);return f?f.value:""};
+      t=`${get("weekday")} ${get("hour")}:${get("minute")}`;
+      const df=new Intl.DateTimeFormat("en-US",{year:"numeric",month:"2-digit",day:"2-digit",timeZone:tz});
+      const dp=df.formatToParts(date);const gp=(n)=>{const f=dp.find(x=>x.type===n);return f?f.value:""};
+      d=`${gp("year")}-${gp("month")}-${gp("day")}`;
+    }catch(e){tz=null;}
+  }
+  if(!tz){
+    const d0=new Date(epochMs+offsetMin*60000);
+    const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    t=`${days[d0.getUTCDay()]} ${String(d0.getUTCHours()).padStart(2,"0")}:${String(d0.getUTCMinutes()).padStart(2,"0")}`;
+    d=d0.toISOString().slice(0,10);
+  }
+  return {t,d};
 }
 function valAtIdx(id,x){
   const a=loc.series[id],i=Math.floor(x),f=x-i,v0=a[i],v1=a[Math.min(i+1,N-1)];
