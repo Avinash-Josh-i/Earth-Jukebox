@@ -60,6 +60,13 @@
   .err{color:#ffb3a8}
   .tourbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:12px 0}
   .tourbar span{flex:1 1 280px}
+  .globewrap{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+  #globe{flex:1 1 300px;width:100%;max-width:520px;aspect-ratio:1/1;height:auto;touch-action:none;cursor:grab;display:block}
+  .globectl{flex:1 1 260px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+  .globectl select{max-width:100%}
+  .globectl .note{margin:0}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.78rem;color:var(--mute)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;border:1px solid rgba(255,255,255,.7);vertical-align:-1px}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -68,10 +75,23 @@
 <main>
   <header>
     <h1>Earth Jukebox</h1>
-    <p class="sub">Pick a record and hear the planet. Each record turns NASA Earth data or an Earth image into sound, with text descriptions and keyboard controls so it can be explored without sight.</p>
+    <p class="sub">Click a city on the globe, or pick a record, and hear the planet. Each record turns NASA Earth data or an Earth image into sound, with text descriptions and keyboard controls so it can be explored without sight.</p>
     <button type="button" class="play" id="tour">Guided tour (about 40 seconds)</button>
     <div id="tourbar" class="tourbar" hidden><span id="tourtxt"></span><button type="button" id="tourstop">Stop tour</button></div>
   </header>
+
+  <section id="globe-sec" aria-labelledby="globe-h" hidden>
+    <h2 id="globe-h">Pick a city on the globe</h2>
+    <div class="globewrap">
+      <canvas id="globe" role="img" aria-label="Globe of cities with air quality records. Drag to turn it and click a dot to play that city. The city list next to it does the same."></canvas>
+      <div class="globectl">
+        <label class="inl">City <select id="city"></select></label>
+        <label class="inl" id="win-wrap" hidden>Time window <select id="win"></select></label>
+        <p class="note" id="globe-info"></p>
+        <div class="legend" id="globe-legend" aria-hidden="true"></div>
+      </div>
+    </div>
+  </section>
 
   <section aria-labelledby="rec-h">
     <h2 id="rec-h">Choose a record</h2>
@@ -118,7 +138,7 @@
 
   <details id="story">
     <summary>Why it sounds like this</summary>
-    <p><strong>Air records.</strong> NASA's GEOS-CF model gives hourly surface concentrations of fine particles (PM2.5), ozone, carbon monoxide and nitrogen dioxide. PM2.5 is the kick drum: the dirtier the air, the faster and heavier it beats. Ozone is a bell that climbs a pentatonic scale. Carbon monoxide is a pad that gets louder and brighter. Nitrogen dioxide is a hi-hat style tick that speeds up. When PM2.5 passes the "unhealthy" range the pad's calm fifth bends towards a tense tritone and its filter sharpens, so danger is something you can hear, not only read.</p>
+    <p><strong>Air records.</strong> NASA's GEOS-CF model gives hourly surface concentrations of fine particles (PM2.5), ozone, carbon monoxide and nitrogen dioxide, averaged over a small box around each city. The health of the air sets the harmony and the beat: PM2.5 is placed in its US EPA band, and each band has its own pad chord (calm major, open, minor, diminished, clashing, dense cluster) and its own kick subdivision (once every two beats up to six hits per beat). A quiet click marks the steady beat, so a faster kick is a worse band you can hear. Within a band, PM2.5 sets how hard the kick hits, ozone is a bell that climbs a pentatonic scale, carbon monoxide opens and swells the pad, and nitrogen dioxide is a hi-hat style tick that speeds up. A soft low note marks the start of each local day. On the globe, each dot is coloured by the record's average PM2.5 in the same bands.</p>
     <p><strong>Scale.</strong> By default each pollutant is mapped against a fixed health-based range, so a clean week and a polluted week sound different. The chart's dashed line is the WHO 24-hour PM2.5 guideline (15 µg/m³). "This window only" rescales to the lowest and highest values shown, which is useful for hearing the daily rhythm but hides how bad the air is.</p>
     <p><strong>Image records.</strong> The picture is read as a score, left to right. The average hue chooses the key. Warm images use a minor scale, cool ones a major scale. In each vertical slice the brightest, most saturated feature sets the melody pitch: higher in the picture means a higher note. The melody pans from left ear to right ear in step with the scan line. Slice brightness opens the pad's filter and sets loudness. Dark slices add a low sub tone. Sharp edges add light ticks, and detailed images play more notes. Smooth gradients play fewer, longer ones. Drag the position slider while paused to hear any slice.</p>
     <p><strong>Credits.</strong> Air data comes from NASA GMAO GEOS-CF. Image credits are shown at the bottom of the page for each record.</p>
@@ -139,6 +159,7 @@
 </main>
 
 <script src="data.js"></script>
+<script src="land.js"></script>
 <script src="frames.js"></script>
 <script>
 "use strict";
@@ -154,6 +175,11 @@ const lvl=n=>n<.33?"low":n<.66?"moderate":"high";
 
 const DATA=window.JUKEBOX_DATA;
 const HAS_DATA=!!(DATA&&DATA.locations&&Object.keys(DATA.locations).length);
+if(HAS_DATA)for(const k in DATA.locations){ // fill in what the compact format leaves out
+  const l=DATA.locations[k];
+  if(!l.times&&l.t0)l.times=Array.from({length:l.n},(_,i)=>new Date(Date.parse(l.t0)+i*l.step_min*6e4).toISOString().replace(".000Z","Z"));
+  l.city=l.city||k;l.window=l.window||"";
+}
 
 /* =============== state =============== */
 let mode=null, rec=null, playing=false, ac=null, loopId=0, lastSay=0;
@@ -211,7 +237,7 @@ function drawThumb(cv,r){
 }
 async function renderRecords(){
   const box=$("records");box.textContent="";
-  const list=allRecords();
+  const list=allRecords().filter(r=>!onGlobe(r));
   for(const r of list){
     const b=document.createElement("button");b.className="rec";b.type="button";
     b.setAttribute("aria-pressed",rec&&rec.id===r.id?"true":"false");b.dataset.id=r.id;
@@ -695,7 +721,7 @@ function setSpeedOptions(){
 async function selectRecord(r,autoplay,fromTour){
   if(!fromTour)stopTour();
   if(playing)pause();
-  rec=r;mode=r.kind;IM=null;
+  rec=r;mode=r.kind;IM=null;syncGlobe();
   document.querySelectorAll(".rec").forEach(b=>b.setAttribute("aria-pressed",b.dataset.id===r.id?"true":"false"));
   $("now-title").textContent=r.title;$("view-data").hidden=mode!=="data";$("view-image").hidden=mode!=="image";
   $("scale-wrap").hidden=mode!=="data";$("scrub").disabled=true;$("play").disabled=true;setSpeedOptions();
@@ -757,18 +783,236 @@ async function runTour(){
 $("tour").onclick=runTour;
 $("tourstop").onclick=()=>{stopTour("Tour stopped.");if(playing)pause()};
 
+/* =============== globe =============== */
+/* GLOBE-PURE-START */
+const PM_COLORS=["#00e400","#ffff00","#ff7e00","#ff0000","#8f3f97","#7e0023"]; // US AQI colours, one per EPA band
+const PM_SHORT=["Good","Moderate","Sensitive groups","Unhealthy","Very unhealthy","Hazardous"];
+const D2R=Math.PI/180;
+function gproj(lon,lat,lon0,lat0){ // orthographic projection about (lon0,lat0): [x,y,cos c] on the unit disc, cos c > 0 = facing us
+  const l=(lon-lon0)*D2R,p=lat*D2R,p0=lat0*D2R,cl=Math.cos(l),cp=Math.cos(p);
+  return [cp*Math.sin(l),Math.cos(p0)*Math.sin(p)-Math.sin(p0)*cp*cl,Math.sin(p0)*Math.sin(p)+Math.cos(p0)*cp*cl];
+}
+// Land is rasterised once into an equal-area (sin latitude) mask, then looked up per screen pixel, so every
+// rotation, the poles and lakes (holes) come out right with no polygon clipping.
+const MASK_W=2048,MASK_H=1024;
+function buildLandMask(land,mk){
+  const cv=mk(MASK_W,MASK_H),g=cv.getContext("2d");
+  g.fillStyle="#000";g.beginPath();
+  for(const ring of land){
+    for(let i=0;i<ring.length;i+=2){
+      const x=(ring[i]+180)/360*MASK_W,y=(1-Math.sin(ring[i+1]*D2R))/2*MASK_H;
+      i?g.lineTo(x,y):g.moveTo(x,y);
+    }
+    g.closePath();
+  }
+  g.fill("evenodd");
+  const d=g.getImageData(0,0,MASK_W,MASK_H).data,m=new Uint8Array(MASK_W*MASK_H);
+  for(let i=0;i<m.length;i++)m[i]=d[i*4+3];
+  return m;
+}
+function landLayer(S){ // paints the land seen from (lon0,lat0) onto the square offscreen canvas S.layer
+  const cv=S.layer,n=cv.width,g=cv.getContext("2d"),img=g.createImageData(n,n),px=new Uint32Array(img.data.buffer);
+  const half=n/2,sp=Math.sin(S.lat0*D2R),cp=Math.cos(S.lat0*D2R),l0=S.lon0/360,m=S.mask;
+  const lr=S.hc?255:70,lg=S.hc?255:112,lb=S.hc?255:90;
+  for(let j=0;j<n;j++){
+    const y=(half-j-.5)/half;
+    for(let i=0;i<n;i++){
+      const x=(i+.5-half)/half,q=x*x+y*y;
+      if(q>=1)continue;
+      const z=Math.sqrt(1-q),s=y*cp+z*sp,c=Math.atan2(x,z*cp-y*sp)/6.283185307+.5+l0,u=c-Math.floor(c);
+      const a=m[Math.min(MASK_H-1,((1-s)*.5*MASK_H)|0)*MASK_W+((u*MASK_W)|0)];
+      if(!a)continue;
+      const k=S.hc?1:.6+.4*z; // a little shading towards the rim
+      px[j*n+i]=(a<<24)|((lb*k)<<16)|((lg*k)<<8)|(lr*k);
+    }
+  }
+  g.putImageData(img,0,0);
+}
+function renderGlobe(g,S){
+  const {cx,cy,R,lon0,lat0}=S,hc=S.hc;
+  g.clearRect(0,0,S.w,S.h);
+  // ocean with a soft light from the upper left
+  const og=g.createRadialGradient(cx-R*.35,cy-R*.35,R*.1,cx,cy,R);
+  og.addColorStop(0,hc?"#000":"#1d3a52");og.addColorStop(1,hc?"#000":"#0b1826");
+  g.fillStyle=og;g.beginPath();g.arc(cx,cy,R,0,7);g.fill();
+  g.save();g.beginPath();g.arc(cx,cy,R,0,7);g.clip();
+  landLayer(S);g.imageSmoothingEnabled=true;g.drawImage(S.layer,cx-R,cy-R,2*R,2*R);
+  // graticule every 30 degrees
+  g.strokeStyle=hc?"rgba(255,255,255,.35)":"rgba(255,255,255,.08)";g.lineWidth=1;
+  const line=pts=>{g.beginPath();let pen=false;for(const [lo,la] of pts){const p=gproj(lo,la,lon0,lat0);
+      if(p[2]<=0){pen=false;continue}const x=cx+R*p[0],y=cy-R*p[1];pen?g.lineTo(x,y):g.moveTo(x,y);pen=true}g.stroke()};
+  for(let lo=-180;lo<180;lo+=30){const a=[];for(let la=-90;la<=90;la+=3)a.push([lo,la]);line(a)}
+  for(let la=-60;la<=60;la+=30){const a=[];for(let lo=-180;lo<=180;lo+=3)a.push([lo,la]);line(a)}
+  g.restore();
+  g.strokeStyle=hc?"#fff":S.colors.acc;g.globalAlpha=hc?1:.45;g.lineWidth=hc?2:1.5;g.beginPath();g.arc(cx,cy,R,0,7);g.stroke();g.globalAlpha=1;
+  // city dots: selected last so it sits on top
+  const dots=[];
+  for(const c of S.cities){const p=gproj(c.lon,c.lat,lon0,lat0);if(p[2]>.03)dots.push({c,x:cx+R*p[0],y:cy-R*p[1]})}
+  const rank=d=>d.c.key===S.sel?2:d.c.key===S.hover?1:0;
+  dots.sort((a,b)=>rank(a)-rank(b));
+  for(const d of dots){
+    const on=d.c.key===S.sel,r=on?8:5;
+    g.fillStyle=d.c.band>=0?PM_COLORS[d.c.band]:"#8a8f98";g.strokeStyle=on?"#fff":"rgba(255,255,255,.75)";g.lineWidth=on?3:1.5;
+    g.beginPath();g.arc(d.x,d.y,r,0,7);g.fill();g.stroke();
+    if(on){g.strokeStyle=S.colors.acc;g.lineWidth=2;g.beginPath();g.arc(d.x,d.y,r+5,0,7);g.stroke()}
+  }
+  // name tags for the selected and hovered city
+  g.font="600 13px system-ui,sans-serif";g.textBaseline="middle";
+  for(const d of dots){
+    if(d.c.key!==S.sel&&d.c.key!==S.hover)continue;
+    const tw=g.measureText(d.c.name).width,bx=Math.max(4,Math.min(S.w-tw-20,d.x-tw/2-8)),by=d.c.key===S.sel?d.y-39:d.y+12;
+    g.fillStyle="rgba(0,0,0,.82)";g.strokeStyle="rgba(255,255,255,.6)";g.lineWidth=1;
+    g.beginPath();g.rect(bx,by,tw+16,22);g.fill();g.stroke();
+    g.fillStyle="#fff";g.fillText(d.c.name,bx+8,by+11.5);
+  }
+}
+/* GLOBE-PURE-END */
+
+const GL={on:false,cities:{},list:[],lon0:85,lat0:20,sel:null,hover:null,w:0,h:0,cx:0,cy:0,R:100,dpr:1,anim:0,drag:null,winFor:null,layer:null,mask:null,raf:0};
+const pmMeanCache={};
+function pmMean(rk){
+  if(rk in pmMeanCache)return pmMeanCache[rk];
+  const v=DATA.locations[rk].series.pm25.filter(x=>x!=null);
+  return pmMeanCache[rk]=v.length?v.reduce((a,b)=>a+b,0)/v.length:null;
+}
+const cityBand=c=>{const m=pmMean(c.active);return m==null?-1:pmBand(m)};
+const recTime=rk=>{const l=DATA.locations[rk];return Date.parse(l.t0||(l.times&&l.times[0])||"")||0};
+const baseName=l=>l.window&&l.name.endsWith(", "+l.window)?l.name.slice(0,-(l.window.length+2)):l.name;
+const cityLabel=c=>{const b=cityBand(c);return c.name+(c.country?", "+c.country:"")+(b>=0?" · "+PM_SHORT[b]:"")};
+const dataRec=rk=>allRecords().find(r=>r.id==="air-"+rk);
+const onGlobe=r=>r.kind==="data"&&GL.on&&Number.isFinite(DATA.locations[r.key].lat)&&Number.isFinite(DATA.locations[r.key].lon);
+
+function buildGlobe(){
+  if(!HAS_DATA)return;
+  for(const rk in DATA.locations){
+    const l=DATA.locations[rk];
+    if(!(Number.isFinite(l.lat)&&Number.isFinite(l.lon)))continue; // records without coordinates stay as cards
+    const c=GL.cities[l.city]||(GL.cities[l.city]={key:l.city,name:baseName(l),country:l.country||"",lat:l.lat,lon:l.lon,recs:[],active:rk});
+    c.recs.push(rk);
+  }
+  GL.list=Object.values(GL.cities);
+  for(const c of GL.list){c.recs.sort((a,b)=>recTime(a)-recTime(b));c.active=c.recs[c.recs.length-1]} // newest window first
+  GL.on=GL.list.length>0;
+}
+function fillCitySelect(){
+  const s=$("city");s.textContent="";
+  const o0=document.createElement("option");o0.value="";o0.textContent="Choose a city…";s.appendChild(o0);
+  for(const c of GL.list.slice().sort((a,b)=>a.name.localeCompare(b.name))){
+    const o=document.createElement("option");o.value=c.key;o.textContent=cityLabel(c);s.appendChild(o);
+  }
+  $("globe-info").textContent=`${GL.list.length} ${GL.list.length===1?"city":"cities"}. Drag the globe to turn it and click a dot to hear that city's air. Dot colour is the average PM2.5 of the record, in US EPA bands.`;
+  const lg=$("globe-legend");lg.textContent="";
+  PM_SHORT.forEach((n,i)=>{const s=document.createElement("span"),d=document.createElement("i");d.style.background=PM_COLORS[i];s.append(d,n);lg.appendChild(s)});
+}
+function fillWinSelect(c){
+  const w=$("win"),show=!!c&&c.recs.length>1;
+  $("win-wrap").hidden=!show;
+  if(!show){GL.winFor=null;return}
+  if(GL.winFor!==c.key){
+    w.textContent="";
+    for(const rk of c.recs){const o=document.createElement("option");o.value=rk;o.textContent=DATA.locations[rk].window||"Latest";w.appendChild(o)}
+    GL.winFor=c.key;
+  }
+  w.value=c.active;
+}
+function pickCity(key,autoplay){
+  const c=GL.cities[key];if(!c)return;
+  const r=dataRec(c.active);if(r)selectRecord(r,autoplay);
+}
+function syncGlobe(){ // called whenever a record is selected
+  if(!GL.on)return;
+  const l=rec&&rec.kind==="data"?DATA.locations[rec.key]:null,c=l?GL.cities[l.city]:null;
+  GL.sel=c?c.key:null;
+  if(c){
+    c.active=rec.key;
+    const o=[...$("city").options].find(x=>x.value===c.key);if(o)o.textContent=cityLabel(c);
+    fillWinSelect(c);$("city").value=c.key;flyTo(c.lat,c.lon);
+  }else{$("city").value="";fillWinSelect(null)}
+  drawGlobe();
+}
+function flyTo(lat,lon){
+  cancelAnimationFrame(GL.anim);
+  const a0=((GL.lon0+180)%360+360)%360-180,b0=GL.lat0,dl=((lon-a0+540)%360+360)%360-180,tl=clamp(lat,-70,70)-b0;
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches||(Math.abs(dl)<.2&&Math.abs(tl)<.2)){GL.lon0=a0+dl;GL.lat0=b0+tl;drawGlobe();return}
+  const t0=performance.now();
+  const step=now=>{
+    const k=clamp((now-t0)/700),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+    GL.lon0=a0+dl*e;GL.lat0=b0+tl*e;drawGlobe();
+    if(k<1)GL.anim=requestAnimationFrame(step);
+  };
+  GL.anim=requestAnimationFrame(step);
+}
+function sizeGlobe(){
+  const r=$("globe").getBoundingClientRect();if(!r.width)return;
+  const dpr=Math.min(window.devicePixelRatio||1,2),cv=$("globe");
+  cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);
+  GL.dpr=dpr;GL.w=r.width;GL.h=r.height;GL.cx=r.width/2;GL.cy=r.height/2;GL.R=Math.min(r.width,r.height)/2-16;
+  const n=Math.max(64,Math.ceil(2*GL.R*Math.min(dpr,1.5)));
+  if(!GL.layer)GL.layer=document.createElement("canvas");GL.layer.width=GL.layer.height=n;
+}
+function drawGlobe(){
+  if(!GL.on)return;
+  if(!GL.w)sizeGlobe();if(!GL.w)return;
+  const g=$("globe").getContext("2d");g.setTransform(GL.dpr,0,0,GL.dpr,0,0);
+  renderGlobe(g,{w:GL.w,h:GL.h,cx:GL.cx,cy:GL.cy,R:GL.R,lon0:GL.lon0,lat0:GL.lat0,sel:GL.sel,hover:GL.hover,
+    cities:GL.list.map(c=>({key:c.key,name:c.name,lat:c.lat,lon:c.lon,band:cityBand(c)})),
+    hc:document.body.classList.contains("hc"),layer:GL.layer,mask:GL.mask||(GL.mask=buildLandMask(window.LAND||[],(w,h)=>{const c=document.createElement("canvas");c.width=w;c.height=h;return c})),colors:{acc:css("--acc")}});
+}
+function drawSoon(){if(!GL.raf)GL.raf=requestAnimationFrame(()=>{GL.raf=0;drawGlobe()})} // coalesce pointer events into one draw per frame
+function nearestCity(x,y,maxPx){
+  let best=null,bd=maxPx*maxPx;
+  for(const c of GL.list){
+    const p=gproj(c.lon,c.lat,GL.lon0,GL.lat0);if(p[2]<=.03)continue;
+    const dx=GL.cx+GL.R*p[0]-x,dy=GL.cy-GL.R*p[1]-y,d=dx*dx+dy*dy;
+    if(d<bd){bd=d;best=c}
+  }
+  return best;
+}
+(function wireGlobe(){
+  const gc=$("globe"),pt=e=>{const r=gc.getBoundingClientRect();return [(e.clientX-r.left)*(r.width?GL.w/r.width:1),(e.clientY-r.top)*(r.height?GL.h/r.height:1)]};
+  gc.addEventListener("pointerdown",e=>{
+    if(!GL.on)return;gc.setPointerCapture(e.pointerId);cancelAnimationFrame(GL.anim);
+    const [x,y]=pt(e);GL.drag={x,y,lon0:GL.lon0,lat0:GL.lat0,moved:false};
+  });
+  gc.addEventListener("pointermove",e=>{
+    if(!GL.on)return;const [x,y]=pt(e);
+    if(GL.drag){
+      const dx=x-GL.drag.x,dy=y-GL.drag.y;
+      if(!GL.drag.moved&&Math.hypot(dx,dy)>8)GL.drag.moved=true;
+      if(GL.drag.moved){GL.lon0=GL.drag.lon0-dx/GL.R/D2R;GL.lat0=clamp(GL.drag.lat0+dy/GL.R/D2R,-80,80);gc.style.cursor="grabbing";drawSoon()}
+      return;
+    }
+    if(e.pointerType==="mouse"){
+      const c=nearestCity(x,y,18),k=c?c.key:null;gc.style.cursor=c?"pointer":"grab";
+      if(k!==GL.hover){GL.hover=k;drawSoon()}
+    }
+  });
+  gc.addEventListener("pointerup",e=>{
+    const d=GL.drag;GL.drag=null;gc.style.cursor="grab";
+    if(!GL.on||!d||d.moved)return;
+    const [x,y]=pt(e),c=nearestCity(x,y,e.pointerType==="mouse"?18:26);
+    if(c)pickCity(c.key,true);
+  });
+  gc.addEventListener("pointercancel",()=>{GL.drag=null});
+  gc.addEventListener("pointerleave",()=>{if(GL.hover){GL.hover=null;drawGlobe()}});
+  $("city").onchange=e=>{if(e.target.value)pickCity(e.target.value,playing)};
+  $("win").onchange=e=>{const r=dataRec(e.target.value);if(r)selectRecord(r,playing)};
+})();
+
 /* =============== wiring =============== */
 $("play").onclick=togglePlay;
 $("describe").onclick=()=>setLive(describeNow());
 $("speed").onchange=()=>{if(mode==="image"){const p=ipos;sweepDur=Number($("speed").value);if(playing&&ac)anchor(p)}};
 $("scale").onchange=e=>{scaleMode=e.target.value;updateNote();draw();updateData()};
 $("vol").oninput=e=>{if(master)master.gain.setTargetAtTime(Number(e.target.value),ac.currentTime,.03)};
-$("hc").onchange=e=>{document.body.classList.toggle("hc",e.target.checked);draw();drawImage()};
+$("hc").onchange=e=>{document.body.classList.toggle("hc",e.target.checked);draw();drawImage();drawGlobe()};
 $("scrub").oninput=e=>{
   const p=e.target.value/1000;
   if(mode==="data"){idx=p*(N-1);draw();updateData();dataSeeked()}else if(mode==="image")setImagePos(p);
 };
-addEventListener("resize",()=>{draw();drawImage()});
+addEventListener("resize",()=>{draw();drawImage();sizeGlobe();drawGlobe()});
+if(window.ResizeObserver)new ResizeObserver(()=>{const r=$("globe").getBoundingClientRect();
+  if(r.width&&(Math.abs(r.width-GL.w)>.5||Math.abs(r.height-GL.h)>.5)){sizeGlobe();drawGlobe()}}).observe($("globe"));
 addEventListener("keydown",e=>{
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   const tag=e.target.tagName;
@@ -788,6 +1032,8 @@ addEventListener("keydown",e=>{
 });
 
 setSpeedOptions();
+buildGlobe();
+if(GL.on){$("globe-sec").hidden=false;fillCitySelect();sizeGlobe();$("rec-h").textContent="Or pick a picture";}
 renderRecords();
 loadFrames();
 if(HAS_DATA)selectRecord(allRecords()[0],false);

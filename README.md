@@ -15,7 +15,7 @@ then open http://localhost:8000. A local server is needed so the browser may rea
 
 | Kind | What it is | How it becomes sound |
 |---|---|---|
-| **Air over a city** | Hourly NASA GEOS-CF surface PM2.5, ozone, CO and NO₂ (via `fetch_data.py` → `data.js`) | PM2.5 health band = chord and beat, ozone = bell pitch, CO = pad, NO₂ = ticks (details below) |
+| **Air over a city** (pick it on the globe) | Hourly NASA GEOS-CF surface PM2.5, ozone, CO and NO₂ (via `fetch_data.py` → `data.js`) | PM2.5 health band = chord and beat, ozone = bell pitch, CO = pad, NO₂ = ticks (details below) |
 | **NASA EIC frame** | Any image you list in `frames.js` | The picture is scanned left to right as a score (below) |
 | **Your own image** | Chosen with the file button | Same as above |
 
@@ -50,19 +50,32 @@ To add more:
 2. Add an entry to `frames.js` (title, path, one-line blurb, a short written description for blind users, credit).
 3. Reload. Entries that cannot be loaded are skipped.
 
-## Adding locations
-Add entries to `LOCATIONS` in `fetch_data.py`, then run `python fetch_data.py` (needs `pip install xarray netCDF4 pandas numpy`).
-Each location becomes a record automatically.
+## The globe and adding cities
+Every city in `data.js` that has coordinates is a dot on the globe. Click a dot (or choose the city from the list beside the globe) to play it. Drag the globe to turn it. Dot colour is the record's average PM2.5 in US EPA bands. If a city has more than one time window, a **Time window** menu appears.
+
+`cities.json` lists 84 cities (key, name, country, lat, lon, IANA time zone). Fetch them all, or a few:
+
+```
+pip install xarray netCDF4 pandas numpy        # Windows also: pip install tzdata
+python fetch_data.py --list                    # see the keys
+python fetch_data.py                           # every city, last 7 days
+python fetch_data.py --only kathmandu,delhi    # just these
+python fetch_data.py --add "Pokhara,28.21,83.99,Asia/Kathmandu" --only pokhara --merge
+```
+
+The fetcher caches each finished city in `.fetch_cache/`, so if the connection drops, run the same command again to carry on. Cities that fail or have no data are skipped and listed at the end. Time-zone offsets (including daylight saving) come from each city's IANA zone. `data.js` stores each hourly series compactly (`t0`, `step_min`, `n`); older `data.js` files with full `times` lists still load, and records without `lat`/`lon` stay as cards below the globe.
 
 ## Files
 - `index.html`: the whole app (Web Audio synthesis, image analysis, UI)
 - `data.js`: generated air-quality data
+- `cities.json`: the cities the globe and fetcher know about
+- `land.js`: world land outline for the globe (Natural Earth 110m, public domain)
 - `frames.js`: list of EIC images
 - `get_frames.py`: downloads the listed frames from NASA SVS into `frames/`
-- `fetch_data.py`: pulls GEOS-CF data from NASA OPeNDAP
+- `fetch_data.py`: pulls GEOS-CF data from NASA OPeNDAP (resumable, many cities)
 
 ## Credits
-Air-quality data: NASA GMAO GEOS-CF. Image credits are shown on the page per record.
+Air-quality data: NASA GMAO GEOS-CF. Globe land outline: Natural Earth (public domain). Image credits are shown on the page per record.
 
 ## Guided tour and matching the picture to the numbers
 
