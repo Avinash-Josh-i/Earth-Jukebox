@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Earth Jukebox: listen to the planet</title>
 <style>
-  :root{--bg:#1f242b;--panel:#2a3039;--line:#3a424d;--text:#ece6da;--mute:#a9b1ba;--acc:#6fb9de;
-        --pm25:#e3a53b;--o3:#6fb9de;--co:#d0707d;--no2:#9fba7e}
-  body.hc{--bg:#000;--panel:#000;--line:#fff;--text:#fff;--mute:#e8e8e8;--acc:#7fe0ff;
-          --pm25:#ffd34d;--o3:#7fe0ff;--co:#ff8fa0;--no2:#b6ff8a}
+  /* Palette: cool paper and ink. Series colours are darkened so they stay readable on white. */
+  :root{color-scheme:light;--bg:#fff;--panel:#eef2f5;--line:#c4cfd6;--ctl:#5b6c78;--text:#15222d;--mute:#485762;--acc:#0a58d6;
+        --pm25:#b45f06;--o3:#5b45c9;--co:#c2314d;--no2:#2f7d32;--err:#b3261e}
+  body.hc{color-scheme:dark;--bg:#000;--panel:#000;--line:#fff;--ctl:#fff;--text:#fff;--mute:#e8e8e8;--acc:#7fe0ff;
+          --pm25:#ffd34d;--o3:#c9bfff;--co:#ff8fa0;--no2:#b6ff8a;--err:#ffb3a8}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
   main{max-width:920px;margin:0 auto;padding:28px 18px 56px}
@@ -16,16 +17,16 @@
   h2{font:600 1.25rem Georgia,serif;margin:28px 0 10px}
   .sub{color:var(--mute);margin:0 0 6px;max-width:64ch}
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  .skip{position:absolute;left:-999px;top:8px;background:#fff;color:#000;padding:8px 12px;border-radius:6px;z-index:10}
+  .skip{position:absolute;left:-999px;top:8px;background:var(--text);color:var(--bg);padding:8px 12px;border-radius:6px;z-index:10}
   .skip:focus{left:8px}
   :focus-visible{outline:3px solid var(--acc);outline-offset:2px}
-  select,button,.filebtn{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px}
+  select,button,.filebtn{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--ctl);border-radius:8px;padding:8px 14px}
   button,.filebtn{cursor:pointer} button:hover,.filebtn:hover{border-color:var(--mute)}
   button.play{background:var(--text);color:var(--bg);font-weight:600;min-width:110px}
   .records{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
   .rec{display:flex;flex-direction:column;gap:4px;text-align:left;padding:10px;border-radius:12px}
   .rec[aria-pressed=true]{border-color:var(--text);box-shadow:inset 0 0 0 1px var(--text)}
-  .rec canvas{width:100%;height:70px;border-radius:6px;background:#000;display:block}
+  .rec canvas{width:100%;height:70px;border-radius:6px;background:#0f2a3b;display:block}
   .rec .kind{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
   .rec .t{font-weight:600}.rec .b{font-size:.82rem;color:var(--mute)}
   .filebtn{display:inline-block;margin-top:12px}
@@ -45,7 +46,9 @@
   .track{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px 14px}
   .track.off{opacity:.5}
   .track h3{font:600 1rem system-ui;margin:0;display:flex;justify-content:space-between;align-items:center;gap:8px}
-  .track h3 button{padding:2px 10px;font-size:.85rem}
+  .track h3 button{padding:2px 10px;font-size:.85rem;border-radius:999px;background:transparent;border-color:var(--mute)}
+  .track h3 button[aria-pressed=true]{background:var(--c);border-color:var(--c);color:#fff;font-weight:700}
+  body.hc .track h3 button[aria-pressed=true]{color:#000}
   .track p{margin:2px 0 8px;color:var(--mute);font-size:.82rem}
   .val{font:600 1.5rem Georgia,serif}
   .val small{font:400 .8rem system-ui;color:var(--mute);margin-left:4px}
@@ -57,16 +60,16 @@
   details p,details li{color:var(--mute);max-width:75ch}
   details kbd{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 6px;font:inherit;font-size:.85em}
   .note{color:var(--mute);font-size:.82rem;margin-top:22px}
-  .err{color:#ffb3a8}
+  .err{color:var(--err)}
   .tourbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:12px 0}
   .tourbar span{flex:1 1 280px}
   .globewrap{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
-  #globe{flex:1 1 300px;width:100%;max-width:520px;aspect-ratio:1/1;height:auto;touch-action:none;cursor:grab;display:block}
+  #globe{flex:1 1 300px;width:100%;max-width:520px;aspect-ratio:1/1;height:auto;touch-action:none;cursor:grab;display:block;filter:drop-shadow(0 26px 22px rgba(21,34,45,.28))}
   .globectl{flex:1 1 260px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
   .globectl select{max-width:100%}
   .globectl .note{margin:0}
   .legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.78rem;color:var(--mute)}
-  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;border:1px solid rgba(255,255,255,.7);vertical-align:-1px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;border:1px solid var(--text);vertical-align:-1px}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -227,7 +230,7 @@ function allRecords(){
 function drawThumb(cv,r){
   const g=cv.getContext("2d");g.clearRect(0,0,cv.width,cv.height);
   if(r.kind==="data"){
-    const v=DATA.locations[r.key].series.pm25,n=v.length;g.strokeStyle="#e3a53b";g.lineWidth=2;g.beginPath();
+    const v=DATA.locations[r.key].series.pm25,n=v.length;g.strokeStyle="#e8a93f";g.lineWidth=2;g.beginPath();
     let pen=false;v.forEach((x,i)=>{if(x==null){pen=false;return}const px=i/(n-1)*cv.width,py=cv.height-6-clamp(x/150)*(cv.height-12);
       pen?g.lineTo(px,py):g.moveTo(px,py);pen=true});g.stroke();return;}
   const s=srcCache[r.id];if(!s)return;
@@ -763,9 +766,11 @@ function landLayer(S){ // paints the land seen from (lon0,lat0) onto the square 
 function renderGlobe(g,S){
   const {cx,cy,R,lon0,lat0}=S,hc=S.hc;
   g.clearRect(0,0,S.w,S.h);
+  if(!hc){const hg=g.createRadialGradient(cx,cy,R*.98,cx,cy,R+14); // thin atmosphere glow
+    hg.addColorStop(0,"rgba(120,185,230,.55)");hg.addColorStop(1,"rgba(120,185,230,0)");g.fillStyle=hg;g.beginPath();g.arc(cx,cy,R+14,0,7);g.fill()}
   // ocean with a soft light from the upper left
   const og=g.createRadialGradient(cx-R*.35,cy-R*.35,R*.1,cx,cy,R);
-  og.addColorStop(0,hc?"#000":"#1d3a52");og.addColorStop(1,hc?"#000":"#0b1826");
+  og.addColorStop(0,hc?"#000":"#26546f");og.addColorStop(1,hc?"#000":"#0a1c2c");
   g.fillStyle=og;g.beginPath();g.arc(cx,cy,R,0,7);g.fill();
   g.save();g.beginPath();g.arc(cx,cy,R,0,7);g.clip();
   landLayer(S);g.imageSmoothingEnabled=true;g.drawImage(S.layer,cx-R,cy-R,2*R,2*R);
@@ -775,6 +780,8 @@ function renderGlobe(g,S){
       if(p[2]<=0){pen=false;continue}const x=cx+R*p[0],y=cy-R*p[1];pen?g.lineTo(x,y):g.moveTo(x,y);pen=true}g.stroke()};
   for(let lo=-180;lo<180;lo+=30){const a=[];for(let la=-90;la<=90;la+=3)a.push([lo,la]);line(a)}
   for(let la=-60;la<=60;la+=30){const a=[];for(let lo=-180;lo<=180;lo+=3)a.push([lo,la]);line(a)}
+  if(!hc){const sh=g.createRadialGradient(cx-R*.3,cy-R*.35,R*.2,cx,cy,R*1.02); // light from the upper left, darker limb
+    sh.addColorStop(0,"rgba(255,255,255,.10)");sh.addColorStop(.6,"rgba(0,0,0,0)");sh.addColorStop(1,"rgba(2,8,16,.45)");g.fillStyle=sh;g.fillRect(cx-R,cy-R,2*R,2*R)}
   g.restore();
   g.strokeStyle=hc?"#fff":S.colors.acc;g.globalAlpha=hc?1:.45;g.lineWidth=hc?2:1.5;g.beginPath();g.arc(cx,cy,R,0,7);g.stroke();g.globalAlpha=1;
   // city dots: selected last so it sits on top
