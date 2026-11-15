@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Earth Jukebox — core.js unit tests</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:20px;background:#1f242b;color:#ece6da}
+  h1{margin-bottom:4px}
+  #results{margin-top:12px}
+  .pass{color:#7fe0ff} .fail{color:#ff6b6b}
+  .group{margin:14px 0;padding:10px 14px;border:1px solid #3a424d;border-radius:8px}
+  .group h2{margin:0 0 8px;font-size:1rem}
+  .ok{display:flex;gap:10px;font-family:ui-monospace,Menlo,monospace;font-size:0.9rem}
+  .bad{color:#ff6b6b}
+  .count{font-size:0.85rem;color:#a9b1ba;margin-top:8px}
+  a{color:#6fb9de}
+</style>
+<script type="module">
+  import {
+    clamp, lerp, mtof, noteName, lvl,
+    rgb2hsv, colorName, analyze, buildKey, describeImageGlobal,
+    pmBand, pmCat, formatTime,
+  } from "../js/core.js";
+
+  let passes=0,fails=0;
+  const out=document.getElementById("results");
+  function check(cond,msg){const p=document.createElement("div");p.className="ok "+(cond?"pass":"fail");
+    p.textContent=(cond?"PASS ":"FAIL ")+msg;out.appendChild(p);cond?passes++:fails++;}
+  function eq(actual,expected,msg){const ok=actual===expected;check(ok,msg+(ok?"":` (got ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)})`));}
+  function approx(actual,expected,tol,msg){const ok=Math.abs(actual-expected)<=tol;check(ok,msg+(ok?"":` (got ${actual}, expected ${expected})`));}
+  function group(title){const h=document.createElement("div");h.className="group";h.innerHTML="<h2>"+title+"</h2>";out.appendChild(h);}
+
+  // ---- math / notes ----
+  group("Math &amp; notes");
+  (()=>{
+    check(clamp(0.5)===0.5,"clamp default bounds");
+    check(clamp(-1)===0,"clamps low to 0");
+    check(clamp(2)===1,"clamps high to 1");
+    check(clamp(0.5,-1,1)===0.5,"clamp custom bounds");
+    check(lerp(0,10,0.5)===5,"lerp midpoint");
+    check(Math.abs(mtof(69)-440)<1e-9,"mtof A4 = 440");
+    check(Math.abs(mtof(60)-261.6256)<0.01,"mtof middle C");
+    check(noteName(69)==="A 4","noteName 69");
+    check(noteName(60)==="C 4","noteName 60");
+    check(lvl(0.1)==="low","lvl low");
+    check(lvl(0.5)==="moderate","lvl moderate");
+    check(lvl(0.9)==="high","lvl high");
+  })();
+
+  // ---- colour ----
+  group("Colour");
+  (()=>{
+    eq(JSON.stringify(rgb2hsv(255,0,0)),JSON.stringify([0,1,1]),"rgb2hsv red");
+    eq(JSON.stringify(rgb2hsv(0,0,0)),JSON.stringify([0,0,0]),"rgb2hsv black");
+    check(colorName(0,1,1)==="red","colorName red");
+    check(colorName(200,1,1)==="blue","colorName blue");
+    check(colorName(0,0,0.1)==="dark","colorName dark");
+    check(colorName(10,0.05,0.9)==="grey","colorName grey");
+  })();
+
+  // ---- key / image analysis ----
+  group("Key &amp; image analysis");
+  (()=>{
+    check(buildKey({hue:0,warmth:0.5}).name==="A minor","warm red -> A minor");
+    check(buildKey({hue:200,warmth:-0.5}).name==="E major","cool blue -> E major");
+    check(buildKey({hue:0,warmth:0.5}).minor===true,"minor flag");
+    check(buildKey({hue:200,warmth:-0.5}).minor===false,"major flag");
+    const px=new Uint8ClampedArray([255,0,0,255, 255,0,0,255, 255,0,0,255, 255,0,0,255]);
+    const an=analyze(px,2,2);
+    check(an.g.warmth>0,"solid red is warm");
+    check(an.g.hue===0,"solid red hue 0");
+    check(an.g.names.some(n=>n[0]==="red"),"solid red names red");
+    check(an.cols.length===64,"64 slices");
+    check(an.cols.every(c=>c.v>=0&&c.v<=1),"slice brightness in range");
+  })();
+
+  // ---- PM2.5 bands ----
+  group("PM2.5 US EPA bands");
+  (()=>{
+    check(pmBand(0)===0,"0 -> good band index");
+    check(pmCat(0)==="good","0 -> good");
+    check(pmCat(10)==="moderate","10 -> moderate");
+    check(pmCat(60)==="unhealthy","60 -> unhealthy");
+    check(pmCat(200)==="hazardous","200 -> hazardous");
+    check(pmCat(500)==="hazardous","500 -> hazardous");
+  })();
+
+  // ---- time zones ----
+  group("Time-zone formatting (Intl.DateTimeFormat)");
+  (()=>{
+    const kath=Date.parse("2025-12-26T11:30:00Z"); // Fri, UTC+5:45 -> 17:15 same day
+    eq(formatTime(kath,undefined,345).d,"2025-12-26","fallback date");
+    check(/Fri 17:15/.test(formatTime(kath,undefined,345).t),"fallback time 17:15 (Kathmandu)");
+    eq(formatTime(kath,"Asia/Kathmandu",345).d,"2025-12-26","IANA date Kathmandu");
+    check(/Fri 17:15/.test(formatTime(kath,"Asia/Kathmandu",345).t),"IANA time 17:15 Kathmandu");
+    const nyWinter=Date.parse("2025-12-26T11:30:00Z"); // EST UTC-5 -> 06:30
+    eq(formatTime(nyWinter,"America/New_York",330).d,"2025-12-26","IANA date NY winter");
+    check(/Fri 06:30/.test(formatTime(nyWinter,"America/New_York",330).t),"IANA time 06:30 NY winter (EST)");
+    const nySummer=Date.parse("2026-07-15T12:00:00Z"); // EDT UTC-4 -> 08:00
+    eq(formatTime(nySummer,"America/New_York",300).d,"2026-07-15","IANA date NY summer");
+    check(/Wed 08:00/.test(formatTime(nySummer,"America/New_York",300).t),"IANA time 08:00 NY summer (EDT, DST)");
+    check(/Fri 17:15/.test(formatTime(kath,"Not/AZone",345).t),"invalid zone falls back to offset math");
+  })();
+
+  // ---- describeImageGlobal ----
+  group("describeImageGlobal");
+  (()=>{
+    const desc=describeImageGlobal({g:{val:0.8,warmth:0.4,names:[["red",0.6],["blue",0.2]],edge:0.02,darkFrac:0.1,bright:"top left"}},{name:"C major",minor:false});
+    check(desc.includes("bright"),"describes bright");
+    check(desc.includes("C major"),"names the key");
+    check(desc.includes("major"),"states major/minor");
+  })();
+
+  // ---- summary ----
+  const sum=document.createElement("div");sum.className="count";
+  sum.innerHTML=`<strong>${passes} passed, ${fails} failed</strong> of ${passes+fails}`;
+  out.appendChild(sum);
+  if(fails)sum.style.color="#ff6b6b";else sum.style.color="#7fe0ff";
+</script>
+<h1>Earth Jukebox &mdash; core.js unit tests</h1>
+<p>Plain-JS browser runner (no build, no external deps). Opens <code>js/core.js</code> as an ES module and asserts the pure helpers behave as expected.</p>
+<p class="count" id="results">Running&hellip;</p>
+<p><a href="../index.html">&larr; back to the app</a></p>
+</body>
+</html>

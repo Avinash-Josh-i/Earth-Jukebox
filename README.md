@@ -77,6 +77,9 @@ The fetcher caches each finished city in `.fetch_cache/`, so if the connection d
 ## Credits
 Air-quality data: NASA GMAO GEOS-CF. Globe land outline: Natural Earth (public domain). Image credits are shown on the page per record.
 
+## Testing
+Open `test/runner.html` in a browser (served over HTTP, e.g. `python -m http.server`). It imports `js/core.js` as an ES module and runs plain-JS assertions (no build step, no external dependencies) over the pure helpers: colour conversion, key building, image analysis, PM2.5 EPA bands, and the Intl time-zone formatting.
+
 ## Guided tour and matching the picture to the numbers
 
 The **Guided tour** button plays a short sequence on its own: Reykjavik, Kathmandu, then the NASA air-quality frame. It uses whichever of those records exist, and any click on a record or on Play ends it.
