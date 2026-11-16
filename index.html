@@ -313,7 +313,7 @@ const STEPS=64;
 let scaleMode="ref";
 const REF={pm25:[0,150],o3:[20,80],co:[100,1000],no2:[0,10]};          // fixed, health-oriented ranges
 const norm={pm25:0,o3:0,co:0,no2:0};
-let tension=0,band=0,locT=[];
+let tension=0,band=0,locT=[],locHour=[],locDay=[];
 const onD={pm25:true,o3:true,co:true,no2:true};
 const onI={mel:true,pad:true,bass:true,tex:true};
 
@@ -567,8 +567,32 @@ function imgStep(k,t){
 }
 
 /* =============== data view =============== */
+// Local hour (0-23) and day number (epoch days) for each timestamp. Uses the
+// location's IANA zone when available so daylight-saving changes are honoured
+// (matching formatTime), falling back to the stored fixed offset.
+function localClock(times,tz,offsetMin){
+  const hours=new Array(times.length),days=new Array(times.length);
+  let tf=null,df=null;
+  if(tz){try{
+    tf=new Intl.DateTimeFormat("en-US",{hour:"2-digit",hourCycle:"h23",timeZone:tz});
+    df=new Intl.DateTimeFormat("en-CA",{year:"numeric",month:"2-digit",day:"2-digit",timeZone:tz});
+  }catch(e){tf=df=null}}
+  for(let i=0;i<times.length;i++){
+    if(tf){
+      const d=new Date(times[i]),hp=tf.formatToParts(d),dp=df.formatToParts(d);
+      const g=n=>dp.find(x=>x.type===n).value;
+      hours[i]=+hp.find(x=>x.type==="hour").value;
+      days[i]=Math.floor(Date.UTC(+g("year"),+g("month")-1,+g("day"))/864e5);
+    }else{
+      const t=times[i]+offsetMin*60000;
+      hours[i]=new Date(t).getUTCHours();days[i]=Math.floor(t/864e5);
+    }
+  }
+  return {hours,days};
+}
 function setLocation(key){
   loc=DATA.locations[key];N=loc.times.length;idx=0;range={};locT=loc.times.map(x=>Date.parse(x));
+  const clock=localClock(locT,loc.tz,loc.tz_offset_min);locHour=clock.hours;locDay=clock.days;
   for(const t of TRACKS_D){const v=loc.series[t.id].filter(x=>x!=null);range[t.id]=[Math.min(...v),Math.max(...v)]}
   updateNote();
   const pm=loc.series.pm25;let hi=-1,lo=-1;
@@ -607,7 +631,7 @@ const PM_CHORDS=[
 ];
 const PM_HITS=[.5,1,2,3,4,6];   // kick hits per beat: whole, quarter, eighth, triplet, sixteenth, sextuplet
 const BEAT=1;                    // seconds per beat; the quiet click marks it, the kick subdivides it
-const dayAt=x=>Math.floor((locT[Math.min(N-1,Math.floor(x))]+loc.tz_offset_min*60000)/864e5);
+const dayAt=x=>locDay[Math.min(N-1,Math.floor(x))];
 function updateData(){
   const ft=fmtTime(idx);$("clock").innerHTML=`${ft.t}<small>${ft.d}, local time</small>`;
   for(const t of TRACKS_D){
@@ -629,8 +653,7 @@ function draw(){
   const r=devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
   cv.width=w*r;cv.height=h*r;cx.setTransform(r,0,0,r,0,0);cx.clearRect(0,0,w,h);
   cx.strokeStyle=css("--line");cx.lineWidth=1;
-  for(let d=0;d<N;d++){const lt=new Date(Date.parse(loc.times[d])+loc.tz_offset_min*60000);
-    if(lt.getUTCHours()===0){const x=d/(N-1)*w;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke()}}
+  for(let d=0;d<N;d++){if(locHour[d]===0){const x=d/(N-1)*w;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke()}}
   if(scaleMode==="ref"){const y=h-8-(15/150)*(h-16);cx.strokeStyle=css("--pm25");cx.globalAlpha=.7;cx.setLineDash([5,4]);
     cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();cx.setLineDash([]);cx.globalAlpha=1;
     cx.fillStyle=css("--pm25");cx.font="11px system-ui";cx.fillText("WHO PM2.5 guideline",6,y-4)}
