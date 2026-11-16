@@ -102,6 +102,7 @@ export function pmCat(v){return PM_NAMES[pmBand(v)];}
 // When tz is a valid IANA zone it is used (DST-aware); otherwise offsetMin (minutes
 // east of UTC) is applied to a UTC date.
 export function formatTime(epochMs,tz,offsetMin){
+  if(!Number.isFinite(epochMs))return {t:"",d:""};
   const date=new Date(epochMs);
   let t,d;
   if(tz){
