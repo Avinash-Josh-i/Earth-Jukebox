@@ -106,7 +106,7 @@ export function formatTime(epochMs,tz,offsetMin){
   let t,d;
   if(tz){
     try{
-      const tf=new Intl.DateTimeFormat("en-US",{weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false,timeZone:tz});
+      const tf=new Intl.DateTimeFormat("en-US",{weekday:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23",timeZone:tz});
       const p=tf.formatToParts(date);const get=(n)=>{const f=p.find(x=>x.type===n);return f?f.value:""};
       t=`${get("weekday")} ${get("hour")}:${get("minute")}`;
       const df=new Intl.DateTimeFormat("en-US",{year:"numeric",month:"2-digit",day:"2-digit",timeZone:tz});
