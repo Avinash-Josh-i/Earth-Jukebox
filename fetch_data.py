@@ -101,7 +101,10 @@ def parse_added(text):
     name, lat, lon = parts[0], float(parts[1]), float(parts[2])
     if not (-90 <= lat <= 90 and -180 <= lon <= 180):
         raise ValueError(f"{name}: latitude/longitude out of range")
-    city = {"key": slug(name).replace("-", "_"), "name": name, "country": "", "lat": lat, "lon": lon}
+    key = slug(name).replace("-", "_")
+    if not key:
+        raise ValueError(f"{name}: name must contain at least one letter or digit")
+    city = {"key": key, "name": name, "country": "", "lat": lat, "lon": lon}
     if len(parts) > 3 and parts[3]:
         city["tz"] = parts[3]
     return city
